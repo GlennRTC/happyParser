@@ -1,5 +1,3 @@
-import { js_beautify } from 'js-beautify'
-
 export class MessageParser {
   constructor() {
     this.hl7MessageTypes = {
@@ -586,6 +584,8 @@ export class MessageParser {
   parseJSON(message) {
     try {
       const parsed = JSON.parse(message)
+      
+      // Format JSON with proper indentation
       const formatted = JSON.stringify(parsed, null, 2)
       
       return {

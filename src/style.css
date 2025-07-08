@@ -50,7 +50,7 @@
   }
   
   .code-block {
-    @apply bg-gray-50 border border-gray-200 rounded-lg p-4 font-mono text-sm overflow-auto max-h-96;
+    @apply bg-gray-50 border border-gray-200 rounded-lg p-4 font-mono text-sm overflow-auto max-h-96 whitespace-pre-wrap;
   }
   
   .analysis-item {

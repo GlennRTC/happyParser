@@ -52,6 +52,9 @@ export class UIController {
     const formattedContent = document.getElementById('formattedContent')
     formattedContent.textContent = result.formatted
     
+    // Ensure proper whitespace handling for formatted content
+    formattedContent.style.whiteSpace = 'pre-wrap'
+    
     // Update analysis
     this.displayAnalysis(result.analysis)
     

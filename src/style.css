@@ -65,6 +65,50 @@
     @apply text-medical-gray text-sm;
   }
   
+  .tree-structure {
+    @apply font-mono text-xs;
+  }
+  
+  .tree-node {
+    @apply relative;
+  }
+  
+  .tree-toggle {
+    @apply inline-flex items-center justify-center w-4 h-4 text-xs bg-medical-blue text-white rounded cursor-pointer hover:bg-blue-700 transition-colors mr-2;
+  }
+  
+  .tree-line {
+    @apply border-l border-gray-300 ml-2 pl-4;
+  }
+  
+  .tree-item {
+    @apply py-1 hover:bg-gray-50 rounded px-2 -mx-2;
+  }
+  
+  .tree-key {
+    @apply font-medium text-medical-dark;
+  }
+  
+  .tree-type {
+    @apply text-medical-blue text-xs ml-1;
+  }
+  
+  .tree-value {
+    @apply text-medical-gray ml-2;
+  }
+  
+  .tree-collapsed {
+    @apply hidden;
+  }
+  
+  .tree-expanded {
+    @apply block;
+  }
+  
+  .priority-field {
+    @apply bg-yellow-50 border-l-2 border-yellow-400;
+  }
+  
   .error-message {
     @apply bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg;
   }

@@ -387,6 +387,7 @@ export class MessageParser {
           templateId: templateId,
           code: code,
           structure: this.analyzeHL7v3Structure(rootElement),
+          detailedStructure: this.xmlToObject(rootElement),
           elementCount: rootElement.querySelectorAll('*').length
         }
       }
@@ -442,6 +443,7 @@ export class MessageParser {
           resourceType: resourceType,
           description: this.fhirResourceTypes[resourceType] || 'Unknown resource type',
           structure: this.analyzeFHIRStructure(parsed),
+          detailedStructure: parsed,
           fieldCount: Object.keys(parsed).length
         }
       }
@@ -595,6 +597,7 @@ export class MessageParser {
         analysis: {
           type: Array.isArray(parsed) ? 'Array' : 'Object',
           structure: this.analyzeJSONStructure(parsed),
+          detailedStructure: parsed,
           size: message.length,
           depth: this.calculateJSONDepth(parsed)
         }
@@ -689,6 +692,7 @@ export class MessageParser {
         analysis: {
           rootElement: rootElement.tagName,
           structure: this.analyzeXMLStructure(rootElement),
+          detailedStructure: this.xmlToObject(rootElement),
           elementCount: rootElement.querySelectorAll('*').length,
           namespaces: this.extractXMLNamespaces(rootElement)
         }

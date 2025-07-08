@@ -585,6 +585,11 @@ export class MessageParser {
 
   parseJSON(message) {
     try {
+      // Security: Limit message size to prevent DoS attacks
+      if (message.length > 10 * 1024 * 1024) { // 10MB limit
+        throw new Error('Message too large (max 10MB)')
+      }
+      
       const parsed = JSON.parse(message)
       
       // Format JSON with proper indentation
@@ -675,6 +680,11 @@ export class MessageParser {
 
   parseXML(message) {
     try {
+      // Security: Limit message size to prevent DoS attacks
+      if (message.length > 10 * 1024 * 1024) { // 10MB limit
+        throw new Error('Message too large (max 10MB)')
+      }
+      
       const parser = new DOMParser()
       const doc = parser.parseFromString(message, 'text/xml')
       

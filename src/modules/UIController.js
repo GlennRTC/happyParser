@@ -183,10 +183,16 @@ export class UIController {
     const item = document.createElement('div')
     item.className = 'analysis-item'
     
-    item.innerHTML = `
-      <div class="analysis-label">${this.escapeHtml(label)}</div>
-      <div class="analysis-value ${isCode ? 'font-mono text-xs' : ''}">${this.escapeHtml(value)}</div>
-    `
+    const labelDiv = document.createElement('div')
+    labelDiv.className = 'analysis-label'
+    labelDiv.textContent = label
+    
+    const valueDiv = document.createElement('div')
+    valueDiv.className = `analysis-value ${isCode ? 'font-mono text-xs' : ''}`
+    valueDiv.textContent = value
+    
+    item.appendChild(labelDiv)
+    item.appendChild(valueDiv)
     
     analysisContent.appendChild(item)
     this.itemCount++
@@ -200,9 +206,12 @@ export class UIController {
     // Add section header
     const header = document.createElement('div')
     header.className = 'analysis-item border-t-2 border-medical-blue pt-3 mt-3'
-    header.innerHTML = `
-      <div class="analysis-label text-medical-blue">${this.escapeHtml(title)}</div>
-    `
+    
+    const headerLabel = document.createElement('div')
+    headerLabel.className = 'analysis-label text-medical-blue'
+    headerLabel.textContent = title
+    header.appendChild(headerLabel)
+    
     analysisContent.appendChild(header)
     
     // Create tree structure

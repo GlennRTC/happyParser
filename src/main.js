@@ -27,7 +27,7 @@ class HealthcareFormatAnalyzer {
             <div class="flex items-center">
               <div class="flex-shrink-0">
                 <h1 class="text-2xl font-bold text-medical-blue">
-                  <span class="text-medical-teal">Healthcare</span> Format Analyzer
+                  <span class="text-medical-teal">HappyParser</span> Format Analyzer
                 </h1>
               </div>
             </div>
@@ -43,7 +43,7 @@ class HealthcareFormatAnalyzer {
         <!-- Hero Section -->
         <section class="text-center mb-12">
           <h2 class="text-4xl font-bold text-medical-dark mb-4">
-            Professional Healthcare Data Parser
+            Your Healthcare Data Parser
           </h2>
           <p class="text-xl text-medical-gray mb-8 max-w-3xl mx-auto">
             Analyze, beautify, and understand ASTM, HL7 v2.x/3.x, FHIR, JSON, and XML healthcare messages 

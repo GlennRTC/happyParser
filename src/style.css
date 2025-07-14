@@ -120,4 +120,39 @@
   .loading-spinner {
     @apply animate-spin rounded-full h-5 w-5 border-b-2 border-medical-blue;
   }
+  
+  /* Tab System */
+  .tab-button {
+    @apply py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors duration-200 cursor-pointer flex items-center;
+  }
+  
+  .tab-button.active {
+    @apply border-medical-blue text-medical-blue font-semibold;
+  }
+  
+  .tab-content {
+    display: block;
+  }
+  
+  .tab-content.hidden {
+    display: none;
+  }
+  
+  /* Synthetic Data Generator Specific Styles */
+  .generator-section {
+    @apply bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4;
+  }
+  
+  .preset-description {
+    @apply text-xs text-gray-500 mt-1 italic;
+  }
+  
+  /* Conditional form field transitions */
+  .select-field:disabled {
+    @apply cursor-not-allowed;
+  }
+  
+  .transition-opacity {
+    transition: opacity 0.3s ease-in-out;
+  }
 }

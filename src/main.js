@@ -2,12 +2,14 @@ import './style.css'
 import { FormatDetector } from './modules/FormatDetector.js'
 import { MessageParser } from './modules/MessageParser.js'
 import { UIController } from './modules/UIController.js'
+import { SyntheticDataGenerator } from './modules/SyntheticDataGenerator.js'
 
 class HealthcareFormatAnalyzer {
   constructor() {
     this.formatDetector = new FormatDetector()
     this.messageParser = new MessageParser()
     this.uiController = new UIController()
+    this.syntheticDataGenerator = new SyntheticDataGenerator()
     
     this.init()
   }
@@ -47,7 +49,7 @@ class HealthcareFormatAnalyzer {
           </h2>
           <p class="text-xl text-medical-gray mb-8 max-w-3xl mx-auto">
             Analyze, beautify, and understand ASTM, HL7 v2.x/3.x, FHIR, JSON, and XML healthcare messages 
-            with detailed structure analysis and format detection.
+            with detailed structure analysis, format detection, and synthetic data generation.
           </p>
           <div class="flex justify-center space-x-4">
             <div class="bg-medical-blue text-white px-4 py-2 rounded-lg text-sm">ASTM</div>
@@ -58,17 +60,37 @@ class HealthcareFormatAnalyzer {
           </div>
         </section>
 
-        <!-- Input Section -->
+        <!-- Tabbed Interface -->
         <section class="medical-card mb-8">
-          <div class="flex items-center justify-between mb-6">
-            <h3 class="text-xl font-semibold text-medical-dark">Message Input</h3>
+          <!-- Tab Navigation -->
+          <div class="border-b border-gray-200 mb-6">
+            <nav class="-mb-px flex space-x-8">
+              <button id="parserTab" class="tab-button active" data-tab="parser">
+                <svg class="w-5 h-5 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                Message Parser
+              </button>
+              <button id="generatorTab" class="tab-button" data-tab="generator">
+                <svg class="w-5 h-5 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                </svg>
+                Synthetic Data Generator
+              </button>
+            </nav>
+          </div>
+
+          <!-- Parser Tab Content -->
+          <div id="parserContent" class="tab-content">
+            <div class="flex items-center justify-between mb-6">
+              <h3 class="text-xl font-semibold text-medical-dark">Message Input</h3>
             <button id="clearBtn" class="btn-danger">
               <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
               </svg>
               Clear All
             </button>
-          </div>
+            </div>
           
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div>
@@ -128,6 +150,92 @@ class HealthcareFormatAnalyzer {
               </svg>
               Copy Analysis
             </button>
+            </div>
+          </div>
+
+          <!-- Generator Tab Content -->
+          <div id="generatorContent" class="tab-content hidden">
+            <div class="flex items-center justify-between mb-6">
+              <h3 class="text-xl font-semibold text-medical-dark">Synthetic Data Generator</h3>
+              <button id="clearGeneratorBtn" class="btn-danger">
+                <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+                Clear All
+              </button>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+              <div>
+                <label for="syntheticFormatSelect" class="block text-sm font-medium text-medical-dark mb-2">
+                  Healthcare Format
+                </label>
+                <select id="syntheticFormatSelect" class="select-field">
+                  <option value="">Select format...</option>
+                  <option value="HL7 v2.x">HL7 v2.x Messages</option>
+                  <option value="HL7 v3.x (CDA)">HL7 v3.x (CDA) Documents</option>
+                  <option value="FHIR R4/R5">FHIR R4/R5 Resources</option>
+                  <option value="ASTM">ASTM Records</option>
+                </select>
+              </div>
+              <div>
+                <label for="syntheticTypeSelect" class="block text-sm font-medium text-medical-dark mb-2">
+                  Message/Resource Type
+                </label>
+                <select id="syntheticTypeSelect" class="select-field" disabled>
+                  <option value="">Select type...</option>
+                </select>
+              </div>
+              <div>
+                <label for="numResultsSelect" class="block text-sm font-medium text-medical-dark mb-2">
+                  Number of Tests/Results
+                </label>
+                <select id="numResultsSelect" class="select-field" disabled title="Select a lab/diagnostic message type to enable">
+                  <option value="1">1 Test/Result</option>
+                  <option value="2">2 Tests/Results</option>
+                  <option value="3">3 Tests/Results</option>
+                  <option value="5">5 Tests/Results</option>
+                  <option value="10">10 Tests/Results</option>
+                </select>
+              </div>
+            </div>
+            
+            <div class="mb-6">
+              <div class="flex space-x-4 mb-4">
+                <button id="generateBtn" class="btn-primary" disabled>
+                  <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                  </svg>
+                  Generate Synthetic Data
+                </button>
+              </div>
+              
+              <div id="syntheticOutput" class="hidden">
+                <div class="flex items-center justify-between mb-2">
+                  <label class="block text-sm font-medium text-medical-dark">
+                    Generated Healthcare Data
+                  </label>
+                  <div class="flex space-x-2">
+                    <button id="copyGeneratedBtn" class="btn-secondary text-sm">
+                      <svg class="w-3 h-3 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                      </svg>
+                      Copy
+                    </button>
+                    <button id="useGeneratedBtn" class="btn-primary text-sm">
+                      <svg class="w-3 h-3 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"></path>
+                      </svg>
+                      Use Data
+                    </button>
+                  </div>
+                </div>
+                <textarea id="generatedDataOutput" class="textarea-field h-64 font-mono text-sm" readonly></textarea>
+                <p class="text-xs text-medical-gray mt-2">
+                  Generated data maintains consistent patient information (PII/PHI) across all segments/resources for realistic cross-referencing.
+                </p>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -180,8 +288,8 @@ class HealthcareFormatAnalyzer {
             <div class="col-span-1 md:col-span-2">
               <h4 class="text-lg font-semibold text-medical-dark mb-4">Healthcare Format Analyzer</h4>
               <p class="text-medical-gray text-sm mb-4">
-                Professional healthcare informatics tool for analyzing and parsing medical data formats. 
-                Built for healthcare professionals, developers, and data analysts.
+                Professional healthcare informatics tool for analyzing, parsing, and generating medical data formats. 
+                Features synthetic data generation for testing and development. Built for healthcare professionals, developers, and data analysts.
               </p>
               <div class="flex flex-col space-y-2">
                 <span class="text-xs text-medical-gray">© 2024 Healthcare Format Analyzer</span>
@@ -215,6 +323,7 @@ class HealthcareFormatAnalyzer {
                 <li>• Auto-format & version detection</li>
                 <li>• Message beautification</li>
                 <li>• Structure analysis</li>
+                <li>• Synthetic data generation</li>
                 <li>• Field identification</li>
               </ul>
             </div>
@@ -234,12 +343,40 @@ class HealthcareFormatAnalyzer {
     const messageInput = document.getElementById('messageInput')
     const formatSelect = document.getElementById('formatSelect')
 
-    // Event listeners
+    // Tab elements
+    const parserTab = document.getElementById('parserTab')
+    const generatorTab = document.getElementById('generatorTab')
+    
+    // Synthetic data elements
+    const syntheticFormatSelect = document.getElementById('syntheticFormatSelect')
+    const syntheticTypeSelect = document.getElementById('syntheticTypeSelect')
+    const numResultsSelect = document.getElementById('numResultsSelect')
+    const generateBtn = document.getElementById('generateBtn')
+    const copyGeneratedBtn = document.getElementById('copyGeneratedBtn')
+    const useGeneratedBtn = document.getElementById('useGeneratedBtn')
+    const clearGeneratorBtn = document.getElementById('clearGeneratorBtn')
+
+    // Event listeners - Parser
     parseBtn.addEventListener('click', () => this.handleParse())
     clearBtn.addEventListener('click', () => this.handleClear())
     autoDetectBtn.addEventListener('click', () => this.handleAutoDetect())
     copyFormattedBtn.addEventListener('click', () => this.handleCopyFormatted())
     copyAnalysisBtn.addEventListener('click', () => this.handleCopyAnalysis())
+    
+    // Event listeners - Tabs
+    parserTab.addEventListener('click', () => this.switchTab('parser'))
+    generatorTab.addEventListener('click', () => this.switchTab('generator'))
+    
+    // Event listeners - Synthetic Data Generator
+    syntheticFormatSelect.addEventListener('change', () => this.updateSyntheticTypes())
+    syntheticTypeSelect.addEventListener('change', () => this.validateSyntheticForm())
+    generateBtn.addEventListener('click', () => this.handleGenerateSynthetic())
+    copyGeneratedBtn.addEventListener('click', () => this.handleCopyGenerated())
+    useGeneratedBtn.addEventListener('click', () => this.handleUseGenerated())
+    clearGeneratorBtn.addEventListener('click', () => this.handleClearGenerator())
+    
+    // Initialize synthetic data types
+    this.updateSyntheticTypes()
     
     // Keyboard shortcuts
     messageInput.addEventListener('keydown', (e) => {
@@ -323,6 +460,255 @@ class HealthcareFormatAnalyzer {
     }).catch(() => {
       this.uiController.showError('Failed to copy to clipboard')
     })
+  }
+
+  // Tab Management
+  switchTab(tabName) {
+    const parserTab = document.getElementById('parserTab')
+    const generatorTab = document.getElementById('generatorTab')
+    const parserContent = document.getElementById('parserContent')
+    const generatorContent = document.getElementById('generatorContent')
+
+    // Remove active class from all tabs
+    parserTab.classList.remove('active')
+    generatorTab.classList.remove('active')
+    
+    // Hide all content
+    parserContent.classList.add('hidden')
+    generatorContent.classList.add('hidden')
+
+    // Show selected tab and content
+    if (tabName === 'parser') {
+      parserTab.classList.add('active')
+      parserContent.classList.remove('hidden')
+    } else if (tabName === 'generator') {
+      generatorTab.classList.add('active')
+      generatorContent.classList.remove('hidden')
+    }
+  }
+
+  // Synthetic Data Generator Methods
+  updateSyntheticTypes() {
+    const formatSelect = document.getElementById('syntheticFormatSelect')
+    const typeSelect = document.getElementById('syntheticTypeSelect')
+    const generateBtn = document.getElementById('generateBtn')
+    
+    // Clear existing options
+    typeSelect.innerHTML = '<option value="">Select type...</option>'
+    typeSelect.disabled = true
+    generateBtn.disabled = true
+
+    if (formatSelect.value) {
+      const presets = this.syntheticDataGenerator.getPresets()
+      const formatTypes = presets[formatSelect.value] || []
+
+      formatTypes.forEach(preset => {
+        const option = document.createElement('option')
+        option.value = preset.value
+        option.textContent = preset.label
+        option.title = preset.description
+        typeSelect.appendChild(option)
+      })
+
+      typeSelect.disabled = false
+    }
+    
+    this.validateSyntheticForm()
+  }
+
+  validateSyntheticForm() {
+    const formatSelect = document.getElementById('syntheticFormatSelect')
+    const typeSelect = document.getElementById('syntheticTypeSelect')
+    const generateBtn = document.getElementById('generateBtn')
+    const numResultsSelect = document.getElementById('numResultsSelect')
+    
+    // Generate button validation
+    generateBtn.disabled = !(formatSelect.value && typeSelect.value)
+    
+    // Number of Tests/Results validation
+    this.updateNumResultsAvailability(formatSelect.value, typeSelect.value, numResultsSelect)
+  }
+
+  updateNumResultsAvailability(format, type, numResultsSelect) {
+    // HARDCODED TYPES THAT SUPPORT MULTIPLE RESULTS
+    // Add new types here when expanding functionality
+    const multipleResultsTypes = {
+      'HL7 v2.x': [
+        'ORU^R01',  // Lab Results
+        'OUL^R21'   // Microbiology Results
+        // NOTE: ADT^A01 (Patient Admission) intentionally excluded
+      ],
+      'HL7 v3.x (CDA)': [
+        'LabReport' // Laboratory Report
+        // NOTE: CCD, DischargeSummary, ProgressNote intentionally excluded
+      ],
+      'FHIR R4/R5': [
+        'DiagnosticReport', // Can contain multiple test results
+        'Observation',      // Multiple observations for different tests
+        'ServiceRequest'    // Multiple test orders
+        // NOTE: Patient, Encounter intentionally excluded (single entities)
+      ],
+      'ASTM': [
+        'Complete',   // Complete Message
+        'Order',      // Order Record (multiple orders)
+        'Result'      // Result Record
+        // NOTE: Patient Record intentionally excluded
+      ]
+    }
+
+    const formatTypes = multipleResultsTypes[format] || []
+    const supportsMultiple = formatTypes.includes(type)
+    
+    if (supportsMultiple) {
+      numResultsSelect.disabled = false
+      numResultsSelect.title = 'Select number of tests/results to generate'
+      numResultsSelect.classList.remove('opacity-50')
+      numResultsSelect.classList.add('transition-opacity', 'duration-300')
+    } else {
+      numResultsSelect.disabled = true
+      numResultsSelect.title = 'This message type generates a single entity (not applicable for multiple results)'
+      numResultsSelect.classList.add('opacity-50', 'transition-opacity', 'duration-300')
+      numResultsSelect.value = '1' // Reset to 1 when disabled
+    }
+  }
+
+  handleGenerateSynthetic() {
+    const formatSelect = document.getElementById('syntheticFormatSelect')
+    const typeSelect = document.getElementById('syntheticTypeSelect')
+    const numResultsSelect = document.getElementById('numResultsSelect')
+    const outputSection = document.getElementById('syntheticOutput')
+    const outputTextarea = document.getElementById('generatedDataOutput')
+
+    const format = formatSelect.value
+    const type = typeSelect.value
+    const numResults = parseInt(numResultsSelect.value)
+
+    if (!format || !type) {
+      this.uiController.showError('Please select both format and type')
+      return
+    }
+
+    try {
+      let generatedData
+
+      switch (format) {
+        case 'HL7 v2.x':
+          generatedData = this.syntheticDataGenerator.generateHL7v2Message(type, { numResults })
+          break
+        case 'HL7 v3.x (CDA)':
+          generatedData = this.syntheticDataGenerator.generateHL7v3Document(type, { numResults })
+          break
+        case 'FHIR R4/R5':
+          if (type === 'DiagnosticReport' || type === 'ServiceRequest' || type === 'Observation') {
+            generatedData = JSON.stringify(
+              this.syntheticDataGenerator.generateFHIRResource(type, { numResults }), 
+              null, 
+              2
+            )
+          } else {
+            generatedData = JSON.stringify(
+              this.syntheticDataGenerator.generateFHIRResource(type), 
+              null, 
+              2
+            )
+          }
+          break
+        case 'ASTM':
+          generatedData = this.syntheticDataGenerator.generateASTMMessage(type, { numResults })
+          break
+        default:
+          throw new Error('Unsupported format')
+      }
+
+      outputTextarea.value = generatedData
+      outputSection.classList.remove('hidden')
+      
+      this.uiController.showSuccess('Synthetic healthcare data generated successfully!')
+      
+    } catch (error) {
+      this.uiController.showError(`Error generating data: ${error.message}`)
+    }
+  }
+
+  handleCopyGenerated() {
+    const outputTextarea = document.getElementById('generatedDataOutput')
+    
+    if (!outputTextarea.value) {
+      this.uiController.showError('No data to copy')
+      return
+    }
+
+    navigator.clipboard.writeText(outputTextarea.value).then(() => {
+      this.uiController.showSuccess('Generated data copied to clipboard!')
+    }).catch(() => {
+      this.uiController.showError('Failed to copy to clipboard')
+    })
+  }
+
+  handleUseGenerated() {
+    const outputTextarea = document.getElementById('generatedDataOutput')
+    const messageInput = document.getElementById('messageInput')
+    const formatSelect = document.getElementById('formatSelect')
+    const syntheticFormatSelect = document.getElementById('syntheticFormatSelect')
+    
+    if (!outputTextarea.value) {
+      this.uiController.showError('No data to use')
+      return
+    }
+
+    // Switch to parser tab
+    this.switchTab('parser')
+    
+    // Copy data to message input
+    messageInput.value = outputTextarea.value
+    
+    // Auto-detect format based on synthetic format selection
+    const syntheticFormat = syntheticFormatSelect.value
+    if (syntheticFormat === 'HL7 v2.x') {
+      formatSelect.value = 'hl7v2'
+    } else if (syntheticFormat === 'HL7 v3.x (CDA)') {
+      formatSelect.value = 'hl7v3'
+    } else if (syntheticFormat === 'FHIR R4/R5') {
+      formatSelect.value = 'fhir'
+    } else if (syntheticFormat === 'ASTM') {
+      formatSelect.value = 'astm'
+    }
+    
+    this.uiController.showSuccess('Generated data loaded into parser. Ready to analyze!')
+    
+    // Scroll to message input
+    messageInput.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  handleClearGenerator() {
+    // Clear all form fields
+    const syntheticFormatSelect = document.getElementById('syntheticFormatSelect')
+    const syntheticTypeSelect = document.getElementById('syntheticTypeSelect')
+    const numResultsSelect = document.getElementById('numResultsSelect')
+    const outputSection = document.getElementById('syntheticOutput')
+    const outputTextarea = document.getElementById('generatedDataOutput')
+    
+    // Reset form to default state
+    syntheticFormatSelect.value = ''
+    syntheticTypeSelect.innerHTML = '<option value="">Select type...</option>'
+    syntheticTypeSelect.disabled = true
+    numResultsSelect.value = '1'
+    numResultsSelect.disabled = true
+    numResultsSelect.title = 'Select a lab/diagnostic message type to enable'
+    numResultsSelect.classList.add('opacity-50')
+    
+    // Clear generated output
+    outputTextarea.value = ''
+    outputSection.classList.add('hidden')
+    
+    // Disable generate button
+    const generateBtn = document.getElementById('generateBtn')
+    generateBtn.disabled = true
+    
+    // Generate new patient data for next session
+    this.syntheticDataGenerator.newPatient()
+    
+    this.uiController.showSuccess('Synthetic data generator cleared. New patient session started.')
   }
 }
 

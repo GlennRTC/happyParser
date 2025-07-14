@@ -16,6 +16,9 @@
   },
   "dependencies": {
     "fast-xml-parser": "^4.2.5",
-    "js-beautify": "^1.14.9"
+    "js-beautify": "^1.14.9",
+    "@faker-js/faker": "^8.3.1",
+    "uuid": "^9.0.1",
+    "date-fns": "^2.30.0"
   }
 }

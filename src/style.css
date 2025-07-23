@@ -14,11 +14,11 @@
 
 @layer components {
   .btn-primary {
-    @apply bg-medical-blue hover:bg-blue-800 text-white font-medium px-6 py-3 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg;
+    @apply bg-medical-blue hover:bg-blue-800 text-white font-medium px-6 py-3 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg dark:bg-blue-600 dark:hover:bg-blue-700;
   }
   
   .btn-secondary {
-    @apply bg-medical-teal hover:bg-teal-700 text-white font-medium px-6 py-3 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg;
+    @apply bg-medical-teal hover:bg-teal-700 text-white font-medium px-6 py-3 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg dark:bg-teal-600 dark:hover:bg-teal-700;
   }
   
   .btn-success {
@@ -30,39 +30,39 @@
   }
   
   .btn-outline {
-    @apply border-2 border-medical-blue text-medical-blue hover:bg-medical-blue hover:text-white font-medium px-6 py-3 rounded-lg transition-all duration-200;
+    @apply border-2 border-medical-blue text-medical-blue hover:bg-medical-blue hover:text-white font-medium px-6 py-3 rounded-lg transition-all duration-200 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-600 dark:hover:text-white;
   }
   
   .medical-card {
-    @apply bg-white rounded-xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-shadow duration-200;
+    @apply bg-white rounded-xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-shadow duration-200 dark:bg-dark-surface dark:border-dark-border;
   }
   
   .input-field {
-    @apply w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-medical-blue focus:border-transparent outline-none transition-all duration-200;
+    @apply w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-medical-blue focus:border-transparent outline-none transition-all duration-200 dark:bg-dark-surface dark:border-dark-border dark:text-dark-text dark:focus:ring-blue-500;
   }
   
   .select-field {
-    @apply w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-medical-blue focus:border-transparent outline-none transition-all duration-200 bg-white;
+    @apply w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-medical-blue focus:border-transparent outline-none transition-all duration-200 bg-white dark:bg-dark-surface dark:border-dark-border dark:text-dark-text dark:focus:ring-blue-500;
   }
   
   .textarea-field {
-    @apply w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-medical-blue focus:border-transparent outline-none transition-all duration-200 resize-none;
+    @apply w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-medical-blue focus:border-transparent outline-none transition-all duration-200 resize-none dark:bg-dark-surface dark:border-dark-border dark:text-dark-text dark:focus:ring-blue-500;
   }
   
   .code-block {
-    @apply bg-gray-50 border border-gray-200 rounded-lg p-4 font-mono text-sm overflow-auto max-h-96 whitespace-pre-wrap;
+    @apply bg-gray-50 border border-gray-200 rounded-lg p-4 font-mono text-sm overflow-auto max-h-96 whitespace-pre-wrap dark:bg-gray-800 dark:border-dark-border dark:text-dark-text;
   }
   
   .analysis-item {
-    @apply border-b border-gray-100 pb-3 mb-3 last:border-b-0 last:pb-0 last:mb-0;
+    @apply border-b border-gray-100 pb-3 mb-3 last:border-b-0 last:pb-0 last:mb-0 dark:border-dark-border;
   }
   
   .analysis-label {
-    @apply font-semibold text-medical-dark text-sm mb-1;
+    @apply font-semibold text-medical-dark text-sm mb-1 dark:text-dark-text;
   }
   
   .analysis-value {
-    @apply text-medical-gray text-sm;
+    @apply text-medical-gray text-sm dark:text-dark-text-secondary;
   }
   
   .tree-structure {
@@ -78,15 +78,15 @@
   }
   
   .tree-line {
-    @apply border-l border-gray-300 ml-2 pl-4;
+    @apply border-l border-gray-300 ml-2 pl-4 dark:border-dark-border;
   }
   
   .tree-item {
-    @apply py-1 hover:bg-gray-50 rounded px-2 -mx-2;
+    @apply py-1 hover:bg-gray-50 rounded px-2 -mx-2 dark:hover:bg-gray-700;
   }
   
   .tree-key {
-    @apply font-medium text-medical-dark;
+    @apply font-medium text-medical-dark dark:text-dark-text;
   }
   
   .tree-type {
@@ -94,7 +94,7 @@
   }
   
   .tree-value {
-    @apply text-medical-gray ml-2;
+    @apply text-medical-gray ml-2 dark:text-dark-text-secondary;
   }
   
   .tree-collapsed {
@@ -123,7 +123,7 @@
   
   /* Tab System */
   .tab-button {
-    @apply py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors duration-200 cursor-pointer flex items-center;
+    @apply py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors duration-200 cursor-pointer flex items-center dark:text-dark-text-secondary dark:hover:text-dark-text dark:hover:border-dark-border;
   }
   
   .tab-button.active {
@@ -140,11 +140,11 @@
   
   /* Synthetic Data Generator Specific Styles */
   .generator-section {
-    @apply bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4;
+    @apply bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4 dark:bg-gray-800 dark:border-dark-border;
   }
   
   .preset-description {
-    @apply text-xs text-gray-500 mt-1 italic;
+    @apply text-xs text-gray-500 mt-1 italic dark:text-dark-text-secondary;
   }
   
   /* Conditional form field transitions */
@@ -154,5 +154,14 @@
   
   .transition-opacity {
     transition: opacity 0.3s ease-in-out;
+  }
+
+  /* Theme toggle button */
+  .theme-toggle {
+    @apply p-2 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 transition-colors duration-200 flex items-center justify-center;
+  }
+  
+  .theme-toggle svg {
+    @apply w-5 h-5 text-gray-600 dark:text-gray-300;
   }
 }

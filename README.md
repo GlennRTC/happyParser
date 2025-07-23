@@ -1,40 +1,36 @@
 # 🏥 Healthcare Format Analyzer
 
-> **Professional healthcare informatics format analyzer and parser for ASTM, HL7 v2.x/3.x, FHIR, JSON and XML messages**
+A client-side web application for parsing and analyzing healthcare data formats including ASTM, HL7 v2.x/3.x, FHIR, JSON, and XML messages.
 
-[![Security Status](https://img.shields.io/badge/Security-Audited-green.svg)](https://github.com) [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT) [![Version](https://img.shields.io/badge/Version-1.0.0-brightgreen.svg)](https://github.com)
+## Features
 
----
+### Multi-Format Support
+- **ASTM** - E1381, E1394, E1238 standards with record-level parsing
+- **HL7 v2.x** - ADT, ORM, ORU, OUL with segment analysis (v2.1-v2.9)
+- **HL7 v3.x** - Clinical Document Architecture (CDA) with template detection
+- **FHIR** - R4, R4B, R5 resources with detailed structure analysis
+- **JSON** - Advanced object/array analysis with pattern detection
+- **XML** - Namespace-aware parsing with schema recognition
 
-## 🌟 **Features**
+### Analysis Features
+- Auto-detection of format and version
+- Hierarchical tree view with expand/collapse
+- Important healthcare fields highlighted
+- Performance optimized (max 50 items, 255-char value truncation)
+- Detailed field-by-field explanations
 
-### 🔍 **Multi-Format Support**
-- **🔬 ASTM** - E1381, E1394, E1238 standards with record-level parsing
-- **🏥 HL7 v2.x** - ADT, ORM, ORU, OUL with segment analysis (v2.1-v2.9)
-- **📋 HL7 v3.x** - Clinical Document Architecture (CDA) with template detection
-- **⚡ FHIR** - R4, R4B, R5 resources with detailed structure analysis
-- **📄 JSON** - Advanced object/array analysis with pattern detection
-- **🌐 XML** - Namespace-aware parsing with schema recognition
+### User Experience
+- Professional healthcare-focused design
+- Responsive layout for desktop and tablet
+- Copy functions for formatted data and analysis
+- Real-time parsing and analysis
+- Keyboard shortcuts (Ctrl+Enter to parse)
 
-### 🎯 **Intelligent Analysis**
-- **🤖 Auto-detection** - Smart format and version identification
-- **🌳 Hierarchical Tree View** - 8-level deep structure analysis with expand/collapse
-- **⭐ Priority Fields** - Important healthcare fields highlighted
-- **📊 Performance Optimized** - Max 50 items, 255-char value truncation
-- **🔍 Field Descriptions** - Detailed field-by-field explanations
-
-### ✨ **User Experience**
-- **🎨 Medical Theme** - Professional healthcare-focused design
-- **📱 Responsive** - Optimized for desktop and tablet use
-- **📋 Copy Functions** - Separate copy buttons for formatted data and analysis
-- **🚀 Real-time** - Instant parsing and analysis
-- **⌨️ Keyboard Shortcuts** - Ctrl+Enter to parse
-
-### 🔒 **Security & Performance**
-- **🛡️ Security Audited** - XSS protection, input validation, CSP headers
-- **⚡ Size Limits** - 10MB max message size for DoS protection
-- **🔐 Content Security Policy** - Comprehensive security headers
-- **🚫 No Backdoors** - Clean, audited codebase
+### Security & Performance
+- Client-side processing only (no data sent to servers)
+- 10MB max message size limit
+- XSS protection and input validation
+- Content Security Policy headers
 
 ---
 

@@ -1,0 +1,75 @@
+# Robots.txt file for Healthcare Format Analyzer
+# This file follows web standards to properly guide search engine crawlers
+# Last updated: 2025
+
+# User-agent: * applies to all web crawlers
+User-agent: *
+
+# Allow all content to be crawled
+Allow: /
+
+# Disallow crawling of certain directories/files if they exist
+# (These may not exist in this SPA, but included as best practice)
+Disallow: /admin/
+Disallow: /private/
+Disallow: /temp/
+Disallow: /cache/
+Disallow: /.git/
+Disallow: /node_modules/
+Disallow: /src/
+Disallow: /dist/
+Disallow: /*.log
+Disallow: /*.tmp
+
+# Allow crawling of main application files
+Allow: /index.html
+Allow: /assets/
+Allow: /medical-icon.svg
+
+# Crawl-delay: Number of seconds to wait between requests
+# Set to 1 second to be respectful to server resources
+Crawl-delay: 1
+
+# Sitemap location (if you have one)
+# Sitemap: https://healthcare-format-analyzer.netlify.app/sitemap.xml
+
+# Additional directives for specific search engines
+
+# Google-specific settings
+User-agent: Googlebot
+Allow: /
+Crawl-delay: 1
+
+# Bing-specific settings  
+User-agent: Bingbot
+Allow: /
+Crawl-delay: 1
+
+# Yahoo-specific settings
+User-agent: Slurp
+Allow: /
+Crawl-delay: 1
+
+# Block known bad crawlers and scrapers
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
+
+User-agent: BLEXBot
+Disallow: /
+
+# Additional security: Block crawlers that ignore robots.txt
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: AhreLinkBot
+Disallow: /
+
+# Note: This is a healthcare informatics tool for professionals
+# Content is educational and follows medical data privacy standards
+# No actual patient data or PHI is processed or stored

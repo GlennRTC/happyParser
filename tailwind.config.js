@@ -9,8 +9,8 @@ export default {
     extend: {
       colors: {
         'medical-blue': '#1e3a8a',
-        'medical-teal': '#0d9488',
-        'medical-green': '#059669',
+        'medical-teal': '#0f766e',
+        'medical-green': '#047857',
         'medical-red': '#dc2626',
         'medical-gray': '#6b7280',
         'medical-light': '#f8fafc',

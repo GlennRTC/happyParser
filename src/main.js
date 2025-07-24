@@ -42,7 +42,7 @@ class HealthcareFormatAnalyzer {
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
                 </svg>
               </button>
-              <span class="bg-medical-blue text-white text-xs px-2 py-1 rounded-full dark:bg-blue-600">v1.0</span>
+              <span class="bg-medical-blue text-white text-xs px-2 py-1 rounded-full dark:bg-blue-600">v1.3</span>
             </div>
           </div>
         </div>
@@ -318,7 +318,7 @@ class HealthcareFormatAnalyzer {
               <h4 class="font-semibold text-medical-dark dark:text-dark-text mb-4">Supported Formats</h4>
               <ul class="text-sm text-medical-gray dark:text-dark-text-secondary space-y-2">
                 <li>• HL7 v2.x (ADT, ORM, ORU, etc.)</li>
-                <li>• HL7 v3.x (CDA, CCR)</li>
+                <li>• HL7 v3.x (C-CDA, CCR)</li>
                 <li>• FHIR R4/R5</li>
                 <li>• ASTM E1381 & others</li>
                 <li>• JSON & XML</li>

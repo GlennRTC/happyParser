@@ -10,7 +10,9 @@ export class FormatDetector {
         /<ClinicalDocument[^>]*xmlns[^>]*hl7\.org/i,
         /<ClinicalDocument[^>]*xmlns[^>]*CDA/i,
         /<ClinicalDocument/i,
-        /<ContinuityOfCareRecord/i
+        /<ContinuityOfCareRecord/i,
+        /templateId[^>]*2\.16\.840\.1\.113883\.10\.20\.22/i,
+        /C-CDA/i
       ],
       fhir: [
         /"resourceType"\s*:\s*"(Patient|Observation|Bundle|Condition|Procedure|DiagnosticReport|Encounter|Organization|Practitioner|Location|AllergyIntolerance|Immunization|Medication|MedicationRequest|MedicationStatement|Goal|CarePlan|CareTeam|Device|DeviceRequest|DeviceUseStatement|PractitionerRole|RelatedPerson|HealthcareService|ServiceRequest|Appointment|AppointmentResponse|Schedule|Slot|Coverage|Claim|ClaimResponse|ExplanationOfBenefit|Contract|ImmunizationEvaluation|ImmunizationRecommendation|MeasureReport|QuestionnaireResponse|Task|Communication|CommunicationRequest|RequestGroup|Basic|Binary|DocumentReference|List|Library|Measure|PlanDefinition|ActivityDefinition|Questionnaire|OperationDefinition|SearchParameter|CompartmentDefinition|ImplementationGuide|CapabilityStatement|StructureDefinition|ValueSet|CodeSystem|ConceptMap|NamingSystem|TerminologyCapabilities|ProviderCredentials|InsurancePlan|SubstanceDefinition|RegulatedAuthorization|MedicinalProductDefinition|ClinicalUseDefinition|Evidence|EvidenceReport|EvidenceVariable|ResearchStudy|ResearchSubject|ActivityDefinition|EventDefinition|ChargeItemDefinition|Invoice|Account|PaymentNotice|PaymentReconciliation|AuditEvent|Consent|Provenance|Signature|DocumentManifest|SupplyDelivery|SupplyRequest|VisionPrescription|RiskAssessment|GuidanceResponse|DetectedIssue|Flag|AdverseEvent|AllergyIntolerance|Condition|Procedure|FamilyMemberHistory|ClinicalImpression|DiagnosticReport|Observation|ImagingStudy|Media|Specimen|BodyStructure|ImagingSelection|MolecularSequence|GenomicStudy|BiologicallyDerivedProduct|Substance|NutritionOrder|NutritionIntake|InventoryReport|InventoryItem|Transport|DeviceAssociation|DeviceDispense|DeviceUsage|MessageDefinition|MessageHeader|EventDefinition|SubscriptionTopic|Subscription|SubscriptionStatus|Parameters|Bundle|Binary|Resource)"/i,
@@ -51,8 +53,13 @@ export class FormatDetector {
         { pattern: /\|2\.9\|/, version: 'v2.9' }
       ],
       hl7v3: [
+        { pattern: /templateId[^>]*2\.16\.840\.1\.113883\.10\.20\.22\.1\.1/i, version: 'C-CDA R2.1 CCD' },
+        { pattern: /templateId[^>]*2\.16\.840\.1\.113883\.10\.20\.22\.1\.2/i, version: 'C-CDA R2.1 Consultation' },
+        { pattern: /templateId[^>]*2\.16\.840\.1\.113883\.10\.20\.22\.1\.3/i, version: 'C-CDA R2.1 Diagnostic' },
+        { pattern: /templateId[^>]*2\.16\.840\.1\.113883\.10\.20\.22/i, version: 'C-CDA R2.1' },
         { pattern: /CDA.*Release.*2/i, version: 'CDA R2' },
         { pattern: /CDA.*Release.*3/i, version: 'CDA R3' },
+        { pattern: /C-CDA/i, version: 'C-CDA' },
         { pattern: /xmlns.*CDA/i, version: 'CDA' }
       ],
       fhir: [
@@ -166,7 +173,9 @@ export class FormatDetector {
         
       case 'hl7v3':
         if (message.includes('ClinicalDocument')) confidence += 0.3
+        if (message.includes('templateId') && message.includes('2.16.840.1.113883.10.20.22')) confidence += 0.3
         if (message.includes('xmlns') && message.includes('hl7')) confidence += 0.2
+        if (message.includes('C-CDA')) confidence += 0.2
         break
         
       case 'fhir':

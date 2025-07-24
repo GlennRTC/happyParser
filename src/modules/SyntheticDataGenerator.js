@@ -170,6 +170,10 @@ export class SyntheticDataGenerator {
         return this.generateDischargeSummary()
       case 'ProgressNote':
         return this.generateProgressNote()
+      case 'ConsultationNote':
+        return this.generateConsultationNote()
+      case 'HistoryAndPhysical':
+        return this.generateHistoryAndPhysical()
       default:
         return this.generateContinuityOfCareDocument()
     }
@@ -437,7 +441,8 @@ export class SyntheticDataGenerator {
     const docId = uuidv4()
     const effectiveTime = format(new Date(), 'yyyyMMddHHmmss')
     const patientExtension = this.sessionData.patientId
-    const dischargeDate = format(addDays(this.sessionData.admitDate, faker.number.int({ min: 2, max: 14 })), 'yyyyMMdd')
+    const dischargeDateObj = addDays(this.sessionData.admitDate, faker.number.int({ min: 2, max: 14 }))
+    const dischargeDate = format(dischargeDateObj, 'yyyyMMdd')
     
     return `<?xml version="1.0" encoding="UTF-8"?>
 <ClinicalDocument xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
@@ -473,7 +478,7 @@ export class SyntheticDataGenerator {
           <code code="42348-3" displayName="Advance directives" codeSystem="2.16.840.1.113883.6.1" codeSystemName="LOINC"/>
           <title>HOSPITAL COURSE</title>
           <text>
-            <paragraph>Patient admitted on ${format(this.sessionData.admitDate, 'MM/dd/yyyy')} with ${faker.helpers.arrayElement(['chest pain', 'shortness of breath', 'abdominal pain', 'fever'])}. Treatment included ${faker.helpers.arrayElement(['IV antibiotics', 'cardiac monitoring', 'pain management', 'fluid resuscitation'])}. Patient responded well to treatment and was discharged on ${format(new Date(dischargeDate), 'MM/dd/yyyy')} in stable condition.</paragraph>
+            <paragraph>Patient admitted on ${format(this.sessionData.admitDate, 'MM/dd/yyyy')} with ${faker.helpers.arrayElement(['chest pain', 'shortness of breath', 'abdominal pain', 'fever'])}. Treatment included ${faker.helpers.arrayElement(['IV antibiotics', 'cardiac monitoring', 'pain management', 'fluid resuscitation'])}. Patient responded well to treatment and was discharged on ${format(dischargeDateObj, 'MM/dd/yyyy')} in stable condition.</paragraph>
           </text>
         </section>
       </component>
@@ -535,6 +540,216 @@ export class SyntheticDataGenerator {
           <title>ASSESSMENT AND PLAN</title>
           <text>
             <paragraph>Patient continues to show ${faker.helpers.arrayElement(['improvement', 'stable condition', 'gradual recovery'])} with current treatment plan. ${faker.helpers.arrayElement(['Vital signs stable', 'Laboratory values within normal limits', 'Patient tolerating medications well'])}. Plan to ${faker.helpers.arrayElement(['continue current medications', 'monitor closely', 'discharge tomorrow if stable'])}.</paragraph>
+          </text>
+        </section>
+      </component>
+    </structuredBody>
+  </component>
+</ClinicalDocument>`
+  }
+
+  generateConsultationNote() {
+    const docId = uuidv4()
+    const effectiveTime = format(new Date(), 'yyyyMMddHHmmss')
+    const patientExtension = this.sessionData.patientId
+    const consultationType = faker.helpers.arrayElement(['Cardiology', 'Pulmonology', 'Endocrinology', 'Nephrology', 'Gastroenterology'])
+    const chiefComplaint = faker.helpers.arrayElement(['chest pain', 'shortness of breath', 'diabetes management', 'hypertension', 'abdominal pain'])
+    
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<ClinicalDocument xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <realmCode code="US"/>
+  <typeId root="2.16.840.1.113883.1.3" extension="POCD_HD000040"/>
+  <templateId root="2.16.840.1.113883.10.20.22.1.4" extension="2015-08-01"/>
+  <id extension="${docId}" root="2.16.840.1.113883.19.5"/>
+  <code code="11488-4" displayName="Consult note" codeSystem="2.16.840.1.113883.6.1" codeSystemName="LOINC"/>
+  <title>${consultationType} Consultation Note</title>
+  <effectiveTime value="${effectiveTime}"/>
+  <confidentialityCode code="N" displayName="Normal" codeSystem="2.16.840.1.113883.5.25" codeSystemName="Confidentiality"/>
+  <languageCode code="en-US"/>
+  
+  <recordTarget>
+    <patientRole>
+      <id extension="${patientExtension}" root="2.16.840.1.113883.19.5"/>
+      <addr use="HP">
+        <streetAddressLine>${this.sessionData.address.street}</streetAddressLine>
+        <city>${this.sessionData.address.city}</city>
+        <state>${this.sessionData.address.state}</state>
+        <postalCode>${this.sessionData.address.zip}</postalCode>
+        <country>US</country>
+      </addr>
+      <telecom value="tel:${this.sessionData.phone}" use="HP"/>
+      <patient>
+        <name use="L">
+          <given>${this.sessionData.firstName}</given>
+          <given>${this.sessionData.middleName}</given>  
+          <family>${this.sessionData.lastName}</family>
+        </name>
+        <administrativeGenderCode code="${this.sessionData.gender}" displayName="${this.sessionData.gender === 'M' ? 'Male' : 'Female'}" codeSystem="2.16.840.1.113883.5.1" codeSystemName="AdministrativeGender"/>
+        <birthTime value="${this.formatHL7Date(this.sessionData.birthDate)}"/>
+      </patient>
+    </patientRole>
+  </recordTarget>
+  
+  <author>
+    <time value="${effectiveTime}"/>
+    <assignedAuthor>
+      <id extension="${this.sessionData.physician.id}" root="2.16.840.1.113883.19.5"/>
+      <assignedPerson>
+        <name>
+          <given>${this.sessionData.physician.firstName}</given>
+          <family>${this.sessionData.physician.lastName}</family>
+        </name>
+      </assignedPerson>
+    </assignedAuthor>
+  </author>
+  
+  <component>
+    <structuredBody>
+      <component>
+        <section>
+          <templateId root="2.16.840.1.113883.10.20.22.2.13"/>
+          <code code="10164-2" displayName="History of present illness" codeSystem="2.16.840.1.113883.6.1" codeSystemName="LOINC"/>
+          <title>HISTORY OF PRESENT ILLNESS</title>
+          <text>
+            <paragraph>Patient presents for ${consultationType.toLowerCase()} consultation regarding ${chiefComplaint}. ${faker.helpers.arrayElement(['Symptoms began approximately', 'Patient reports', 'History notable for'])} ${faker.helpers.arrayElement(['3 weeks ago', '2 months ago', 'recent worsening of'])} ${faker.helpers.arrayElement(['with intermittent episodes', 'with progressive worsening', 'following medication changes'])}.</paragraph>
+          </text>
+        </section>
+      </component>
+      
+      <component>
+        <section>
+          <templateId root="2.16.840.1.113883.10.20.22.2.8"/>
+          <code code="51847-2" displayName="Assessment and plan" codeSystem="2.16.840.1.113883.6.1" codeSystemName="LOINC"/>
+          <title>ASSESSMENT AND PLAN</title>
+          <text>
+            <paragraph>Impression: ${faker.helpers.arrayElement(['Likely', 'Probable', 'Rule out'])} ${faker.helpers.arrayElement(['cardiovascular etiology', 'pulmonary pathology', 'metabolic disorder', 'inflammatory process'])}. Recommend ${faker.helpers.arrayElement(['additional testing including', 'initiation of', 'optimization of current'])} ${faker.helpers.arrayElement(['echocardiogram and stress test', 'pulmonary function tests', 'comprehensive metabolic panel', 'anti-inflammatory therapy'])}. Follow up in ${faker.helpers.arrayElement(['2-4 weeks', '1 month', '6-8 weeks'])} or sooner if symptoms worsen.</paragraph>
+          </text>
+        </section>
+      </component>
+    </structuredBody>
+  </component>
+</ClinicalDocument>`
+  }
+
+  generateHistoryAndPhysical() {
+    const docId = uuidv4()
+    const effectiveTime = format(new Date(), 'yyyyMMddHHmmss')
+    const patientExtension = this.sessionData.patientId
+    const admissionReason = faker.helpers.arrayElement(['chest pain', 'shortness of breath', 'abdominal pain', 'altered mental status', 'fever and chills'])
+    const vitals = {
+      temp: faker.number.float({ min: 97.0, max: 101.5, fractionDigits: 1 }),
+      bp_sys: faker.number.int({ min: 110, max: 160 }),
+      bp_dia: faker.number.int({ min: 60, max: 100 }),
+      hr: faker.number.int({ min: 60, max: 110 }),
+      rr: faker.number.int({ min: 12, max: 24 }),
+      o2sat: faker.number.int({ min: 95, max: 100 })
+    }
+    
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<ClinicalDocument xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <realmCode code="US"/>
+  <typeId root="2.16.840.1.113883.1.3" extension="POCD_HD000040"/>
+  <templateId root="2.16.840.1.113883.10.20.22.1.3" extension="2015-08-01"/>
+  <id extension="${docId}" root="2.16.840.1.113883.19.5"/>
+  <code code="34117-2" displayName="History and physical note" codeSystem="2.16.840.1.113883.6.1" codeSystemName="LOINC"/>
+  <title>History and Physical Examination</title>
+  <effectiveTime value="${effectiveTime}"/>
+  <confidentialityCode code="N" displayName="Normal" codeSystem="2.16.840.1.113883.5.25" codeSystemName="Confidentiality"/>
+  <languageCode code="en-US"/>
+  
+  <recordTarget>
+    <patientRole>
+      <id extension="${patientExtension}" root="2.16.840.1.113883.19.5"/>
+      <addr use="HP">
+        <streetAddressLine>${this.sessionData.address.street}</streetAddressLine>
+        <city>${this.sessionData.address.city}</city>
+        <state>${this.sessionData.address.state}</state>
+        <postalCode>${this.sessionData.address.zip}</postalCode>
+        <country>US</country>
+      </addr>
+      <telecom value="tel:${this.sessionData.phone}" use="HP"/>
+      <patient>
+        <name use="L">
+          <given>${this.sessionData.firstName}</given>
+          <given>${this.sessionData.middleName}</given>
+          <family>${this.sessionData.lastName}</family>
+        </name>
+        <administrativeGenderCode code="${this.sessionData.gender}" displayName="${this.sessionData.gender === 'M' ? 'Male' : 'Female'}" codeSystem="2.16.840.1.113883.5.1" codeSystemName="AdministrativeGender"/>
+        <birthTime value="${this.formatHL7Date(this.sessionData.birthDate)}"/>
+      </patient>
+    </patientRole>
+  </recordTarget>
+  
+  <author>
+    <time value="${effectiveTime}"/>
+    <assignedAuthor>
+      <id extension="${this.sessionData.physician.id}" root="2.16.840.1.113883.19.5"/>
+      <assignedPerson>
+        <name>
+          <given>${this.sessionData.physician.firstName}</given>
+          <family>${this.sessionData.physician.lastName}</family>
+        </name>
+      </assignedPerson>
+    </assignedAuthor>
+  </author>
+  
+  <component>
+    <structuredBody>
+      <component>
+        <section>
+          <templateId root="2.16.840.1.113883.10.20.22.2.13"/>
+          <code code="10164-2" displayName="History of present illness" codeSystem="2.16.840.1.113883.6.1" codeSystemName="LOINC"/>
+          <title>HISTORY OF PRESENT ILLNESS</title>
+          <text>
+            <paragraph>${this.sessionData.firstName} ${this.sessionData.lastName} is a ${faker.datatype.number({ min: 18, max: 85 })}-year-old ${this.sessionData.gender === 'M' ? 'male' : 'female'} presenting with ${admissionReason}. ${faker.helpers.arrayElement(['Symptoms began', 'Patient reports onset of', 'Complaint started'])} ${faker.helpers.arrayElement(['this morning', 'yesterday evening', '2 days ago', 'gradually over the past week'])}. ${faker.helpers.arrayElement(['Associated with', 'Patient also reports', 'Notable for'])} ${faker.helpers.arrayElement(['nausea and vomiting', 'dizziness', 'fatigue', 'no radiation', 'mild diaphoresis'])}.</paragraph>
+          </text>
+        </section>
+      </component>
+      
+      <component>
+        <section>
+          <templateId root="2.16.840.1.113883.10.20.22.2.4.1"/>
+          <code code="8716-3" displayName="Vital signs" codeSystem="2.16.840.1.113883.6.1" codeSystemName="LOINC"/>
+          <title>VITAL SIGNS</title>
+          <text>
+            <table border="1" width="100%">
+              <thead>
+                <tr><th>Vital Sign</th><th>Value</th><th>Unit</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Temperature</td><td>${vitals.temp}</td><td>°F</td></tr>
+                <tr><td>Blood Pressure</td><td>${vitals.bp_sys}/${vitals.bp_dia}</td><td>mmHg</td></tr>
+                <tr><td>Heart Rate</td><td>${vitals.hr}</td><td>bpm</td></tr>
+                <tr><td>Respiratory Rate</td><td>${vitals.rr}</td><td>breaths/min</td></tr>
+                <tr><td>Oxygen Saturation</td><td>${vitals.o2sat}</td><td>%</td></tr>
+              </tbody>
+            </table>
+          </text>
+        </section>
+      </component>
+      
+      <component>
+        <section>
+          <templateId root="2.16.840.1.113883.10.20.22.2.10"/>
+          <code code="29545-1" displayName="Physical examination" codeSystem="2.16.840.1.113883.6.1" codeSystemName="LOINC"/>
+          <title>PHYSICAL EXAMINATION</title>
+          <text>
+            <paragraph>General: ${faker.helpers.arrayElement(['Well-appearing', 'Appears stated age', 'Alert and oriented'])} ${this.sessionData.gender === 'M' ? 'male' : 'female'} in ${faker.helpers.arrayElement(['no acute distress', 'mild distress', 'moderate distress'])}.</paragraph>
+            <paragraph>HEENT: ${faker.helpers.arrayElement(['Normocephalic, atraumatic', 'PERRL, EOMI', 'Oropharynx clear'])}. ${faker.helpers.arrayElement(['No lymphadenopathy', 'Neck supple', 'No JVD'])}.</paragraph>
+            <paragraph>Cardiovascular: ${faker.helpers.arrayElement(['RRR', 'Regular rate and rhythm'])}. ${faker.helpers.arrayElement(['No murmurs, rubs, or gallops', 'S1 and S2 present', 'Normal heart sounds'])}.</paragraph>
+            <paragraph>Pulmonary: ${faker.helpers.arrayElement(['Clear to auscultation bilaterally', 'Good air movement', 'No wheezes, rales, or rhonchi'])}.</paragraph>
+            <paragraph>Abdomen: ${faker.helpers.arrayElement(['Soft, non-tender, non-distended', 'Bowel sounds present', 'No organomegaly'])}. ${faker.helpers.arrayElement(['No masses palpated', 'No rebound or guarding', 'Non-tender to palpation'])}.</paragraph>
+          </text>
+        </section>
+      </component>
+      
+      <component>
+        <section>
+          <templateId root="2.16.840.1.113883.10.20.22.2.8"/>
+          <code code="51847-2" displayName="Assessment and plan" codeSystem="2.16.840.1.113883.6.1" codeSystemName="LOINC"/>
+          <title>ASSESSMENT AND PLAN</title>
+          <text>
+            <paragraph>Assessment: ${faker.helpers.arrayElement(['Working diagnosis of', 'Likely', 'Rule out'])} ${faker.helpers.arrayElement(['acute coronary syndrome', 'pneumonia', 'gastroenteritis', 'urinary tract infection', 'viral syndrome'])}. Plan: ${faker.helpers.arrayElement(['Obtain CBC, BMP, troponins', 'Chest X-ray and EKG', 'IV fluids and symptomatic care', 'Blood cultures and urinalysis'])}. ${faker.helpers.arrayElement(['Serial cardiac enzymes', 'Repeat vitals q4h', 'NPO for now', 'Monitor I/Os closely'])}. Will reassess in AM.</paragraph>
           </text>
         </section>
       </component>
@@ -899,11 +1114,13 @@ export class SyntheticDataGenerator {
         { value: 'OUL^R21', label: 'Microbiology Results (OUL^R21)', description: 'Microbiology/specimen results' },
         { value: 'ADT^A01', label: 'Patient Admission (ADT^A01)', description: 'Hospital admission message' }
       ],
-      'HL7 v3.x (CDA)': [
+      'C-CDA': [
         { value: 'CCD', label: 'Continuity of Care Document', description: 'Complete patient summary with allergies, medications, and problems' },
-        { value: 'LabReport', label: 'Laboratory Report', description: 'CDA-formatted laboratory results document' },
+        { value: 'LabReport', label: 'Laboratory Report', description: 'C-CDA laboratory results document with multiple test results' },
         { value: 'DischargeSummary', label: 'Discharge Summary', description: 'Hospital discharge summary with course and medications' },
-        { value: 'ProgressNote', label: 'Progress Note', description: 'Clinical progress note with assessment and plan' }
+        { value: 'ProgressNote', label: 'Progress Note', description: 'Clinical progress note with assessment and plan' },
+        { value: 'ConsultationNote', label: 'Consultation Note', description: 'Specialist consultation with recommendations and findings' },
+        { value: 'HistoryAndPhysical', label: 'History and Physical', description: 'Initial H&P examination report with clinical findings' }
       ],
       'FHIR R4/R5': [
         { value: 'Patient', label: 'Patient Resource', description: 'Patient demographic information' },

@@ -127,7 +127,11 @@
   }
   
   .tab-button.active {
-    @apply border-medical-blue text-medical-blue font-semibold;
+    @apply border-medical-blue text-medical-blue font-semibold dark:border-blue-400;
+  }
+  
+  .dark .tab-button.active {
+    color: rgb(13 148 136 / var(--tw-text-opacity, 1));
   }
   
   .tab-content {

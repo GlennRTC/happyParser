@@ -108,7 +108,7 @@ class HealthcareFormatAnalyzer {
               <select id="formatSelect" class="select-field">
                 <option value="">Select format...</option>
                 <option value="hl7v2">HL7 v2.x</option>
-                <option value="hl7v3">HL7 v3.x (CDA)</option>
+                <option value="hl7v3">C-CDA</option>
                 <option value="fhir">FHIR</option>
                 <option value="astm">ASTM</option>
                 <option value="json">JSON</option>
@@ -181,7 +181,7 @@ class HealthcareFormatAnalyzer {
                 <select id="syntheticFormatSelect" class="select-field">
                   <option value="">Select format...</option>
                   <option value="HL7 v2.x">HL7 v2.x Messages</option>
-                  <option value="HL7 v3.x (CDA)">HL7 v3.x (CDA) Documents</option>
+                  <option value="C-CDA">C-CDA Documents</option>
                   <option value="FHIR R4/R5">FHIR R4/R5 Resources</option>
                   <option value="ASTM">ASTM Records</option>
                 </select>
@@ -552,7 +552,7 @@ class HealthcareFormatAnalyzer {
         'OUL^R21'   // Microbiology Results
         // NOTE: ADT^A01 (Patient Admission) intentionally excluded
       ],
-      'HL7 v3.x (CDA)': [
+      'C-CDA': [
         'LabReport' // Laboratory Report
         // NOTE: CCD, DischargeSummary, ProgressNote intentionally excluded
       ],
@@ -609,7 +609,7 @@ class HealthcareFormatAnalyzer {
         case 'HL7 v2.x':
           generatedData = this.syntheticDataGenerator.generateHL7v2Message(type, { numResults })
           break
-        case 'HL7 v3.x (CDA)':
+        case 'C-CDA':
           generatedData = this.syntheticDataGenerator.generateHL7v3Document(type, { numResults })
           break
         case 'FHIR R4/R5':
@@ -680,7 +680,7 @@ class HealthcareFormatAnalyzer {
     const syntheticFormat = syntheticFormatSelect.value
     if (syntheticFormat === 'HL7 v2.x') {
       formatSelect.value = 'hl7v2'
-    } else if (syntheticFormat === 'HL7 v3.x (CDA)') {
+    } else if (syntheticFormat === 'C-CDA') {
       formatSelect.value = 'hl7v3'
     } else if (syntheticFormat === 'FHIR R4/R5') {
       formatSelect.value = 'fhir'

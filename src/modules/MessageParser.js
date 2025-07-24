@@ -410,7 +410,7 @@ export class MessageParser {
       structure.push(childInfo)
     }
     
-    return structure.slice(0, 20) // Limit to first 20 elements
+    return structure.slice(0, 100) // Increased limit for table data
   }
 
   parseFHIR(message) {
@@ -479,7 +479,7 @@ export class MessageParser {
       structure.push(field)
     }
     
-    return structure.slice(0, 20)
+    return structure.slice(0, 100) // Increased limit for complex data
   }
 
   formatFHIRValue(value) {
@@ -639,7 +639,7 @@ export class MessageParser {
       }
     }
     
-    return structure.slice(0, 20)
+    return structure.slice(0, 100) // Increased limit for complex data
   }
 
   formatJSONValue(value) {
@@ -731,7 +731,7 @@ export class MessageParser {
       structure.push(childInfo)
     }
     
-    return structure.slice(0, 20)
+    return structure.slice(0, 100) // Increased limit for complex data
   }
 
   extractXMLNamespaces(element) {

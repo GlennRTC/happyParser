@@ -42,7 +42,7 @@ class HealthcareFormatAnalyzer {
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
                 </svg>
               </button>
-              <span class="bg-medical-blue text-white text-xs px-2 py-1 rounded-full dark:bg-blue-600">v1.3</span>
+              <span class="bg-medical-blue text-white text-xs px-2 py-1 rounded-full dark:bg-blue-600">v1.4</span>
             </div>
           </div>
         </div>
@@ -300,7 +300,7 @@ class HealthcareFormatAnalyzer {
                 Features synthetic data generation for testing and development. Built for healthcare professionals, developers, and data analysts.
               </p>
               <div class="flex flex-col space-y-2">
-                <span class="text-xs text-medical-gray dark:text-dark-text-secondary">© 2024 Healthcare Format Analyzer</span>
+                <span class="text-xs text-medical-gray dark:text-dark-text-secondary">© 2026 Healthcare Format Analyzer</span>
                 <span class="text-xs text-medical-gray dark:text-dark-text-secondary">Developed by Glenn R. Tomassi</span>
                 <div class="flex items-center space-x-2">
                   <a href="https://github.com/GlennRTC/happyParse" target="_blank" rel="noopener noreferrer" 

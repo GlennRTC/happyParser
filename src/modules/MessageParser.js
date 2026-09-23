@@ -1,3 +1,32 @@
+import { XMLParser, XMLValidator } from 'fast-xml-parser'
+import { HL7_SEGMENT_FIELDS, HL7_DATATYPE_COMPONENTS } from './hl7v2Definitions.js'
+
+const HL7_HEADERS = new Set(['MSH', 'FHS', 'BHS'])
+const MAX_INPUT = 10 * 1024 * 1024 // 10MB: DoS guard for XML/JSON
+// preserveOrder keeps text and child elements in document order, so mixed narrative reads correctly
+const xmlParser = new XMLParser({
+  ignoreAttributes: false, attributeNamePrefix: '', preserveOrder: true, trimValues: false,
+  parseTagValue: false, parseAttributeValue: false
+})
+const xmlFlatText = nodes => nodes.map(n => '#text' in n ? n['#text'] : xmlFlatText(n[Object.keys(n).find(k => k !== ':@')] || [])).join('')
+
+// Ordered nodes → { tag: child | child[], '@attributes': {…}, '#text': in-order text of mixed/leaf elements }
+const xmlToTree = nodes => {
+  const obj = {}
+  for (const n of nodes) {
+    if ('#text' in n) continue
+    const tag = Object.keys(n).find(k => k !== ':@')
+    const child = xmlToTree(n[tag] || [])
+    if (n[':@']) child['@attributes'] = n[':@']
+    obj[tag] = tag in obj ? [...[obj[tag]].flat(), child] : child
+  }
+  const hasText = nodes.some(n => '#text' in n && /\S/.test(n['#text']))
+  const hasChildren = nodes.some(n => !('#text' in n))
+  if (hasText || !hasChildren) obj['#text'] = xmlFlatText(nodes).replace(/\s+/g, ' ').trim()
+  return obj
+}
+const xmlText = n => (typeof n === 'object' ? n?.['#text'] : n) ?? ''
+
 export class MessageParser {
   constructor() {
     this.hl7MessageTypes = {
@@ -167,7 +196,6 @@ export class MessageParser {
       'RCP': 'Response Control Parameter',
       'SPM': 'Specimen',
       'SAC': 'Specimen and Container Detail',
-      'OBX': 'Observation/Result',
       'TCD': 'Test Code Detail',
       'SID': 'Substance Identifier',
       'TCC': 'Test Code Configuration',
@@ -187,15 +215,8 @@ export class MessageParser {
       'AIP': 'Appointment Information - Personnel Resource',
       'AIS': 'Appointment Information - Service',
       'APR': 'Appointment Preferences',
-      'PID': 'Patient Identification',
-      'PV1': 'Patient Visit',
       'RGS': 'Resource Group',
-      'AIG': 'Appointment Information - General Resource',
-      'AIL': 'Appointment Information - Location Resource',
-      'AIP': 'Appointment Information - Personnel Resource',
-      'AIS': 'Appointment Information - Service',
-      'NDS': 'Notification Detail',
-      'NTE': 'Notes and Comments'
+      'NDS': 'Notification Detail'
     }
 
     this.fhirResourceTypes = {
@@ -242,214 +263,247 @@ export class MessageParser {
     }
 
     this.astmRecordTypes = {
-      'H': 'Header Record - Contains sender and receiver information',
-      'P': 'Patient Information Record - Contains patient demographics',
-      'O': 'Test Order Record - Contains test order information',
-      'R': 'Result Record - Contains test results',
-      'C': 'Comment Record - Contains comments',
-      'M': 'Manufacturer Information Record - Contains manufacturer info',
-      'S': 'Scientific Record - Contains scientific data',
-      'L': 'Terminator Record - Indicates end of transmission'
+      H: 'Header', P: 'Patient Information', O: 'Test Order', R: 'Result', C: 'Comment',
+      Q: 'Request Information', M: 'Manufacturer Information', S: 'Scientific', L: 'Terminator'
+    }
+
+    // ASTM E1394 / CLSI LIS2-A2 field names; position 1 is the record type
+    this.astmFields = {
+      H: ['Record Type ID', 'Delimiter Definition', 'Message Control ID', 'Access Password', 'Sender Name or ID',
+        'Sender Street Address', 'Reserved Field', 'Sender Telephone Number', 'Characteristics of Sender', 'Receiver ID',
+        'Comment or Special Instructions', 'Processing ID', 'Version Number', 'Date and Time of Message'],
+      P: ['Record Type ID', 'Sequence Number', 'Practice Assigned Patient ID', 'Laboratory Assigned Patient ID',
+        'Patient ID No. 3', 'Patient Name', 'Mother\'s Maiden Name', 'Birthdate', 'Patient Sex',
+        'Patient Race-Ethnic Origin', 'Patient Address', 'Reserved Field', 'Patient Telephone Number',
+        'Attending Physician ID', 'Special Field 1', 'Special Field 2', 'Patient Height', 'Patient Weight',
+        'Patient\'s Known or Suspected Diagnosis', 'Patient Active Medications', 'Patient\'s Diet', 'Practice Field No. 1',
+        'Practice Field No. 2', 'Admission and Discharge Dates', 'Admission Status', 'Location',
+        'Nature of Alternative Diagnostic Code and Classifiers', 'Alternative Diagnostic Code and Classification',
+        'Patient Religion', 'Marital Status', 'Isolation Status', 'Language', 'Hospital Service', 'Hospital Institution',
+        'Dosage Category'],
+      O: ['Record Type ID', 'Sequence Number', 'Specimen ID', 'Instrument Specimen ID', 'Universal Test ID', 'Priority',
+        'Requested/Ordered Date and Time', 'Specimen Collection Date and Time', 'Collection End Time',
+        'Collection Volume', 'Collector ID', 'Action Code', 'Danger Code', 'Relevant Clinical Information',
+        'Date/Time Specimen Received', 'Specimen Descriptor', 'Ordering Physician', 'Physician\'s Telephone Number',
+        'User Field No. 1', 'User Field No. 2', 'Laboratory Field No. 1', 'Laboratory Field No. 2',
+        'Date/Time Results Reported or Last Modified', 'Instrument Charge to Information System',
+        'Instrument Section ID', 'Report Types', 'Reserved Field', 'Location of Specimen Collection',
+        'Nosocomial Infection Flag', 'Specimen Service', 'Specimen Institution'],
+      R: ['Record Type ID', 'Sequence Number', 'Universal Test ID', 'Data or Measurement Value', 'Units',
+        'Reference Ranges', 'Result Abnormal Flags', 'Nature of Abnormality Testing', 'Result Status',
+        'Date of Change in Instrument Normative Values', 'Operator Identification', 'Date/Time Test Started',
+        'Date/Time Test Completed', 'Instrument Identification'],
+      C: ['Record Type ID', 'Sequence Number', 'Comment Source', 'Comment Text', 'Comment Type'],
+      Q: ['Record Type ID', 'Sequence Number', 'Starting Range ID Number', 'Ending Range ID Number', 'Universal Test ID',
+        'Nature of Request Time Limits', 'Beginning Request Results Date and Time', 'Ending Request Results Date and Time',
+        'Requesting Physician Name', 'Requesting Physician Telephone Number', 'User Field No. 1', 'User Field No. 2',
+        'Request Information Status Codes'],
+      M: ['Record Type ID', 'Sequence Number'],
+      S: ['Record Type ID', 'Sequence Number'],
+      L: ['Record Type ID', 'Sequence Number', 'Termination Code']
+    }
+    this.astmComponents = {
+      'Universal Test ID': ['Universal Test ID Number', 'Universal Test ID Name', 'Universal Test ID Type',
+        'Manufacturer\'s or Local Code'],
+      'Patient Name': ['Last Name', 'First Name', 'Middle Name', 'Suffix', 'Title'],
+      'Mother\'s Maiden Name': ['Last Name', 'First Name', 'Middle Name', 'Suffix', 'Title']
     }
   }
 
   parse(message, format) {
+    const parsers = { hl7v2: this.parseHL7v2, hl7v3: this.parseHL7v3, fhir: this.parseFHIR, astm: this.parseASTM, json: this.parseJSON, xml: this.parseXML }
+    if (!parsers[format]) throw new Error(`Unsupported format: ${format}`)
     try {
-      switch (format) {
-        case 'hl7v2':
-          return this.parseHL7v2(message)
-        case 'hl7v3':
-          return this.parseHL7v3(message)
-        case 'fhir':
-          return this.parseFHIR(message)
-        case 'astm':
-          return this.parseASTM(message)
-        case 'json':
-          return this.parseJSON(message)
-        case 'xml':
-          return this.parseXML(message)
-        default:
-          throw new Error(`Unsupported format: ${format}`)
-      }
+      return parsers[format].call(this, message)
     } catch (error) {
       throw new Error(`Failed to parse ${format} message: ${error.message}`)
     }
   }
 
   parseHL7v2(message) {
-    const lines = message.split(/\r?\n/).filter(line => line.trim())
-    const segments = []
-    let messageType = ''
-    let version = ''
+    const lines = message.split(/\r\n|\r|\n/).map(l => l.replace(/[\x0b\x1c]/g, '').trim()).filter(Boolean)
+    const header = lines.find(l => HL7_HEADERS.has(l.slice(0, 3)))
+    if (!header || !lines.some(l => l.startsWith('MSH'))) throw new Error('No MSH segment found')
+    const fs = header[3]
+    const enc = header.slice(4).split(fs)[0]
+    const d = { field: fs, component: enc[0] || '^', repetition: enc[1] || '~', escape: enc[2] || '\\', subcomponent: enc[3] || '&' }
 
-    for (const line of lines) {
-      const segmentType = line.substring(0, 3)
-      const fields = line.split('|')
-      
-      if (segmentType === 'MSH') {
-        messageType = fields[8] ? fields[8].split('^')[0] : ''
-        version = fields[11] || ''
+    const counts = {}
+    const segments = lines.map(line => {
+      const type = line.slice(0, 3)
+      const parts = line.split(fs)
+      const values = HL7_HEADERS.has(type) ? [fs, ...parts.slice(1)] : parts.slice(1)
+      const defs = HL7_SEGMENT_FIELDS[type] || []
+      counts[type] = (counts[type] || 0) + 1
+      return {
+        type,
+        index: counts[type],
+        name: this.hl7Segments[type] || type,
+        raw: line,
+        fields: values.map((value, i) => {
+          const [name, dataType] = [defs[i]].flat()
+          return { name: name || `${type}-${i + 1}`, value, position: i + 1, dataType }
+        })
       }
+    })
 
-      const segment = {
-        type: segmentType,
-        name: this.hl7Segments[segmentType] || segmentType,
-        fields: this.parseHL7Fields(fields, segmentType),
-        raw: line
-      }
+    const detailedStructure = Object.fromEntries(segments.map(seg => [
+      `${seg.type}${counts[seg.type] > 1 ? ' #' + seg.index : ''} - ${seg.name}`,
+      Object.fromEntries(seg.fields.filter(f => f.value !== '').map(f => {
+        const label = `${seg.type}-${f.position}`
+        const key = f.name === label ? label : `${label} ${f.name}`
+        const isEncoding = HL7_HEADERS.has(seg.type) && f.position <= 2
+        return [key, isEncoding ? f.value : this.fieldTree(f.value, d, label, HL7_DATATYPE_COMPONENTS[f.dataType])]
+      }))
+    ]))
 
-      segments.push(segment)
-    }
+    const pidName = segments.find(s => s.type === 'PID')?.fields[4]?.value || ''
+    const [family = '', given = ''] = pidName.split(d.repetition)[0].split(d.component).map(v => this.decodeEscapes(v, d))
+    const patientName = [given, family].filter(Boolean).join(' ') || null
+
+    const msh = segments.find(s => s.type === 'MSH').fields
+    const [code = '', event = ''] = (msh[8]?.value || '').split(d.component)
+    const version = (msh[11]?.value || '').split(d.component)[0]
 
     return {
       format: 'hl7v2',
-      version: version,
-      formatted: this.formatHL7v2(segments),
+      version,
+      formatted: segments.map(s => s.raw).join('\n'),
       analysis: {
-        messageType: `${messageType} - ${this.hl7MessageTypes[messageType] || 'Unknown'}`,
-        segments: segments.map(seg => ({
-          name: `${seg.type} - ${seg.name}`,
-          fields: seg.fields.filter(f => f.value).slice(0, 10)
-        })),
+        messageType: `${code}${event ? '^' + event : ''} - ${this.hl7MessageTypes[code] || 'Unknown'}`,
+        segments: segments.map(seg => ({ name: `${seg.type} - ${seg.name}`, type: seg.type, index: seg.index, fields: seg.fields })),
         segmentCount: segments.length,
-        version: version
+        version,
+        patientName,
+        detailedStructure
       }
     }
   }
 
-  parseHL7Fields(fields, segmentType) {
-    const fieldDefinitions = {
-      'MSH': [
-        'Field Separator', 'Encoding Characters', 'Sending Application', 'Sending Facility',
-        'Receiving Application', 'Receiving Facility', 'Date/Time of Message', 'Security',
-        'Message Type', 'Message Control ID', 'Processing ID', 'Version ID'
-      ],
-      'PID': [
-        'Set ID', 'Patient ID', 'Patient Identifier List', 'Alternate Patient ID',
-        'Patient Name', 'Mother\'s Maiden Name', 'Date/Time of Birth', 'Administrative Sex',
-        'Patient Alias', 'Race', 'Patient Address', 'County Code', 'Phone Number - Home',
-        'Phone Number - Business', 'Primary Language'
-      ],
-      'OBX': [
-        'Set ID', 'Value Type', 'Observation Identifier', 'Observation Sub-ID',
-        'Observation Value', 'Units', 'References Range', 'Abnormal Flags',
-        'Probability', 'Nature of Abnormal Test', 'Observation Result Status', 'Effective Date'
-      ],
-      'OBR': [
-        'Set ID', 'Placer Order Number', 'Filler Order Number', 'Universal Service Identifier',
-        'Priority', 'Requested Date/Time', 'Observation Date/Time', 'Observation End Date/Time',
-        'Collection Volume', 'Collector Identifier', 'Specimen Action Code'
-      ]
-    }
-
-    const definitions = fieldDefinitions[segmentType] || []
-    const parsedFields = []
-
-    for (let i = 1; i < fields.length; i++) {
-      parsedFields.push({
-        name: definitions[i - 1] || `${segmentType}.${i}`,
-        value: fields[i] || '',
-        position: i
-      })
-    }
-
-    return parsedFields
+  // HL7 (\F\ \S\ \T\ \R\ \E\ \.br\ \.sp\ \H\ \N\ \Xhh\) and ASTM (&F& &S& &R& &E&) escape sequences
+  decodeEscapes(value, d) {
+    if (!value.includes(d.escape)) return value
+    const e = d.escape.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const map = { F: d.field, S: d.component, T: d.subcomponent, R: d.repetition, E: d.escape }
+    return value.replace(new RegExp(`${e}([^${e}]*)${e}`, 'g'), (match, code) =>
+      map[code] ?? (/^\.(br|sp)/.test(code) ? '\n'
+        : /^X([0-9A-Fa-f]{2})+$/.test(code) ? String.fromCharCode(...code.slice(1).match(/../g).map(h => parseInt(h, 16)))
+        // highlight on/off, other formatting commands (.in .ti .sk .ce .fi .nf) and locally defined \Z..\ carry no text
+        : /^([HN]|\..*|Z.*)$/.test(code) ? ''
+        : match))
   }
 
-  formatHL7v2(segments) {
-    return segments.map(segment => segment.raw).join('\n')
+  // One field → decoded string, or { 'PID-5.1 Family Name': … } for components, or an array for repetitions
+  fieldTree(raw, d, label, compNames = []) {
+    const sub = (value, subLabel) => {
+      const parts = d.subcomponent ? value.split(d.subcomponent) : [value]
+      if (parts.length === 1) return this.decodeEscapes(value, d)
+      return Object.fromEntries(parts.map((s, i) => [`${subLabel}.${i + 1}`, this.decodeEscapes(s, d)]).filter(([, v]) => v !== ''))
+    }
+    const reps = raw.split(d.repetition).map(rep => {
+      const comps = rep.split(d.component)
+      if (comps.length === 1) return sub(rep, `${label}.1`)
+      return Object.fromEntries(comps
+        .map((c, i) => [`${label}.${i + 1}${compNames[i] ? ' ' + compNames[i] : ''}`, sub(c, `${label}.${i + 1}`)])
+        .filter(([, v]) => v !== ''))
+    })
+    return reps.length === 1 ? reps[0] : reps
+  }
+
+  parseXmlDocument(message) {
+    if (message.length > MAX_INPUT) throw new Error('Message too large (max 10MB)')
+    const valid = XMLValidator.validate(message)
+    if (valid !== true) throw new Error(`Invalid XML: ${valid.err.msg} (line ${valid.err.line})`)
+    const doc = xmlToTree(xmlParser.parse(message))
+    const rootName = Object.keys(doc).find(k => !k.startsWith('?'))
+    return { rootName, root: doc[rootName] }
   }
 
   parseHL7v3(message) {
-    try {
-      const parser = new DOMParser()
-      const doc = parser.parseFromString(message, 'text/xml')
-      
-      if (doc.querySelector('parsererror')) {
-        throw new Error('Invalid XML format')
+    const { rootName, root } = this.parseXmlDocument(message)
+    const attr = (node, a) => [node].flat()[0]?.['@attributes']?.[a]
+    const templateIds = [root.templateId].flat().map(t => attr(t, 'root')).filter(Boolean)
+    const isCda = rootName.endsWith('ClinicalDocument')
+    // ponytail: paths assume the default CDA namespace (no "cda:" prefixes); prefixed docs still parse, only the summary is empty
+    const name = [[root.recordTarget].flat()[0]?.patientRole?.patient?.name].flat()[0]
+    return {
+      format: 'hl7v3',
+      version: !isCda ? 'V3 Messaging' : templateIds.some(t => t.startsWith('2.16.840.1.113883.10.20.22')) ? 'C-CDA' : 'CDA R2',
+      formatted: this.formatXML(message),
+      analysis: {
+        documentType: xmlText(root.title) || rootName,
+        templateId: templateIds.join(', '),
+        code: attr(root.code, 'code') || '',
+        patientName: name ? [...[name.given].flat().map(xmlText), xmlText(name.family)].filter(Boolean).join(' ') : null,
+        sectionCount: [root.component?.structuredBody?.component].flat().filter(Boolean).length,
+        detailedStructure: root,
+        elementCount: this.countXmlElements(message)
       }
-
-      const rootElement = doc.documentElement
-      const formatted = this.formatXML(message)
-      
-      // Extract basic information
-      const templateId = rootElement.getAttribute('templateId') || 
-                        rootElement.querySelector('templateId')?.getAttribute('root') || ''
-      const code = rootElement.getAttribute('code') || 
-                   rootElement.querySelector('code')?.getAttribute('code') || ''
-      
-      return {
-        format: 'hl7v3',
-        version: 'CDA',
-        formatted: formatted,
-        analysis: {
-          documentType: rootElement.tagName,
-          templateId: templateId,
-          code: code,
-          structure: this.analyzeHL7v3Structure(rootElement),
-          detailedStructure: this.xmlToObject(rootElement),
-          elementCount: rootElement.querySelectorAll('*').length
-        }
-      }
-    } catch (error) {
-      throw new Error(`HL7 v3 parsing error: ${error.message}`)
     }
-  }
-
-  analyzeHL7v3Structure(element) {
-    const structure = []
-    const children = element.children
-    
-    for (const child of children) {
-      const childInfo = {
-        name: child.tagName,
-        attributes: Array.from(child.attributes).map(attr => `${attr.name}="${attr.value}"`),
-        hasChildren: child.children.length > 0,
-        textContent: child.textContent && child.textContent.trim().length > 0 ? child.textContent.trim().substring(0, 100) : ''
-      }
-      structure.push(childInfo)
-    }
-    
-    return structure.slice(0, 100) // Increased limit for table data
   }
 
   parseFHIR(message) {
-    try {
-      let parsed
-      let isXML = false
-      
-      if (message.trim().startsWith('<')) {
-        isXML = true
-        const parser = new DOMParser()
-        const doc = parser.parseFromString(message, 'text/xml')
-        
-        if (doc.querySelector('parsererror')) {
-          throw new Error('Invalid XML format')
-        }
-        
-        parsed = this.xmlToObject(doc.documentElement)
-      } else {
-        parsed = JSON.parse(message)
-      }
-
-      const resourceType = parsed.resourceType || parsed.name || 'Unknown'
-      const formatted = isXML ? this.formatXML(message) : JSON.stringify(parsed, null, 2)
-      
-      return {
-        format: 'fhir',
-        version: this.extractFHIRVersion(message),
-        formatted: formatted,
-        analysis: {
-          resourceType: resourceType,
-          description: this.fhirResourceTypes[resourceType] || 'Unknown resource type',
-          structure: this.analyzeFHIRStructure(parsed),
-          detailedStructure: parsed,
-          fieldCount: Object.keys(parsed).length
-        }
-      }
-    } catch (error) {
-      throw new Error(`FHIR parsing error: ${error.message}`)
+    if (message.length > MAX_INPUT) throw new Error('Message too large (max 10MB)')
+    const isXML = message.trim().startsWith('<')
+    let resource
+    if (isXML) {
+      const { rootName, root } = this.parseXmlDocument(message)
+      resource = { resourceType: rootName, ...this.fhirXmlToJson(root) }
+    } else {
+      resource = JSON.parse(message)
     }
+    const resourceType = resource.resourceType || 'Unknown'
+    const analysis = {
+      resourceType,
+      description: this.fhirResourceTypes[resourceType] || 'Unknown resource type',
+      detailedStructure: resource,
+      fieldCount: Object.keys(resource).length,
+      patientName: this.fhirPatient(resource)
+    }
+    if (resourceType === 'Bundle') {
+      const entries = [resource.entry].flat().filter(Boolean)
+      resource.entry = entries
+      analysis.bundleType = resource.type || null
+      analysis.entryCount = entries.length
+      analysis.resourceCounts = {}
+      for (const e of entries) {
+        const t = e.resource?.resourceType || 'Unknown'
+        analysis.resourceCounts[t] = (analysis.resourceCounts[t] || 0) + 1
+      }
+      analysis.patientName = this.fhirPatient(entries.find(e => e.resource?.resourceType === 'Patient')?.resource || {})
+    }
+    return {
+      format: 'fhir',
+      version: this.extractFHIRVersion(message),
+      formatted: isXML ? this.formatXML(message) : JSON.stringify(resource, null, 2),
+      analysis
+    }
+  }
+
+  // ponytail: no StructureDefinition cardinality, so an XML element that occurs once stays an object (JSON would use an array)
+  fhirXmlToJson(node) {
+    if (Array.isArray(node)) return node.map(n => this.fhirXmlToJson(n))
+    if (typeof node !== 'object' || node === null) return node
+    const { '@attributes': { xmlns, value, ...attrs } = {}, '#text': text, ...children } = node
+    const kids = Object.fromEntries(Object.entries(children).map(([k, v]) => {
+      const converted = this.fhirXmlToJson(v)
+      // <resource><Patient>…</Patient></resource> → resource: { resourceType: 'Patient', … }
+      if ((k === 'resource' || k === 'contained') && !Array.isArray(v) && Object.keys(children[k]).length === 1) {
+        const [type] = Object.keys(v)
+        return [k, { resourceType: type, ...converted[type] }]
+      }
+      return [k, converted]
+    }))
+    if (value !== undefined && !Object.keys(kids).length && !Object.keys(attrs).length) return value
+    return { ...attrs, ...(value !== undefined && { value }), ...kids, ...(text && { '#text': text }) }
+  }
+
+  fhirPatient(r) {
+    if (r.resourceType === 'Patient') {
+      const n = [r.name].flat()[0]
+      return n ? (n.text || [...[n.given].flat(), n.family].filter(Boolean).join(' ')) || null : null
+    }
+    return r.subject?.display || r.subject?.reference || r.patient?.display || r.patient?.reference || null
   }
 
   extractFHIRVersion(message) {
@@ -464,151 +518,79 @@ export class MessageParser {
     return null
   }
 
-  analyzeFHIRStructure(resource) {
-    const structure = []
-    
-    for (const [key, value] of Object.entries(resource)) {
-      if (key === 'resourceType') continue
-      
-      const field = {
-        name: key,
-        type: Array.isArray(value) ? 'array' : typeof value,
-        value: this.formatFHIRValue(value)
+  // ponytail: E1381 link-layer is only unwrapped (STX/FN/ETB/ETX/checksum); checksums are not verified
+  unframeASTM(message) {
+    if (message.includes('\x02')) {
+      let text = ''
+      for (const [, body, end] of message.matchAll(/\x02[0-7]([\s\S]*?)([\x03\x17])[0-9A-Fa-f]{2}/g)) {
+        text += body + (end === '\x03' ? '\r' : '')
       }
-      
-      structure.push(field)
+      message = text
     }
-    
-    return structure.slice(0, 100) // Increased limit for complex data
-  }
-
-  formatFHIRValue(value) {
-    if (Array.isArray(value)) {
-      return `Array(${value.length})`
-    } else if (typeof value === 'object' && value !== null) {
-      return `Object with ${Object.keys(value).length} properties`
-    } else if (typeof value === 'string' && value.length > 50) {
-      return value.substring(0, 50) + '...'
-    } else {
-      return String(value)
-    }
+    return message.split(/\r\n|\r|\n/)
+      .map(l => l.replace(/[\x04\x05\x06\x15]/g, '').trim().replace(/^\d+(?=[A-Z][^A-Za-z0-9\s])/, ''))
+      .filter(l => /^[A-Z][^A-Za-z0-9\s]/.test(l))
   }
 
   parseASTM(message) {
-    const lines = message.split(/\r?\n/).filter(line => line.trim())
-    const records = []
-    
-    for (const line of lines) {
-      const cleaned = line.replace(/[\x02\x03\x04\x05\x06\x15\x17]/g, '')
-      const match = cleaned.match(/^(\d+)([A-Z])\|(.*)/)
-      
-      if (match) {
-        const [, sequence, recordType, data] = match
-        const fields = data.split('|')
-        
-        const record = {
-          sequence: sequence,
-          type: recordType,
-          name: this.astmRecordTypes[recordType] || recordType,
-          fields: this.parseASTMFields(fields, recordType),
-          raw: line
-        }
-        
-        records.push(record)
-      }
-    }
+    const lines = this.unframeASTM(message)
+    const header = lines.find(l => l[0] === 'H')
+    const fs = header?.[1] || '|'
+    const delims = header ? header.slice(2).split(fs)[0] : ''
+    const d = { field: fs, repetition: delims[0] || '\\', component: delims[1] || '^', escape: delims[2] || '&' }
+
+    const counts = {}
+    const records = lines.filter(l => l[1] === fs).map(line => {
+      const type = line[0]
+      const defs = this.astmFields[type] || []
+      counts[type] = (counts[type] || 0) + 1
+      const fields = line.split(fs).map((value, i) => ({ name: defs[i] || `${type}-${i + 1}`, value, position: i + 1 }))
+      return { type, index: counts[type], sequence: fields[1]?.value || '', name: this.astmRecordTypes[type] || type, fields, raw: line }
+    })
+    if (!records.length) throw new Error('No ASTM records found')
+
+    const detailedStructure = Object.fromEntries(records.map(rec => [
+      `${rec.type} #${rec.index} - ${rec.name}`,
+      Object.fromEntries(rec.fields.filter(f => f.value !== '').map(f => {
+        const label = `${rec.type}-${f.position}`
+        const key = f.name === label ? label : `${label} ${f.name}`
+        const isDelims = rec.type === 'H' && f.position === 2
+        return [key, isDelims ? f.value : this.fieldTree(f.value, d, label, this.astmComponents[f.name])]
+      }))
+    ]))
+
+    const pName = records.find(r => r.type === 'P')?.fields[5]?.value || ''
+    const [last = '', first = ''] = pName.split(d.repetition)[0].split(d.component).map(v => this.decodeEscapes(v, d))
+    const hFields = records.find(r => r.type === 'H')?.fields || []
 
     return {
       format: 'astm',
-      version: this.detectASTMVersion(message),
-      formatted: this.formatASTM(records),
+      version: hFields[12]?.value || message.match(/LIS2-A2|E1394|E1381|E1238/)?.[0] || null,
+      formatted: records.map(r => r.raw).join('\n'),
       analysis: {
         recordTypes: [...new Set(records.map(r => r.type))],
         recordCount: records.length,
-        records: records.map(rec => ({
-          name: `${rec.type} - ${rec.name}`,
-          fields: rec.fields.filter(f => f.value).slice(0, 10)
-        }))
+        records: records.map(r => ({ name: `${r.type} - ${r.name}`, type: r.type, sequence: r.sequence, fields: r.fields })),
+        patientName: [first, last].filter(Boolean).join(' ') || null,
+        detailedStructure
       }
     }
-  }
-
-  parseASTMFields(fields, recordType) {
-    const fieldDefinitions = {
-      'H': [
-        'Delimiter Definition', 'Message Control ID', 'Access Password', 'Sender Name/ID',
-        'Sender Address', 'Reserved', 'Sender Phone', 'Sender Characteristics',
-        'Receiver ID', 'Comment', 'Processing ID', 'Version Number', 'Timestamp'
-      ],
-      'P': [
-        'Practice Patient ID', 'Lab Patient ID', 'Patient ID 3', 'Patient Name',
-        'Mother\'s Maiden Name', 'Birth Date', 'Patient Sex', 'Patient Race',
-        'Patient Address', 'Reserved', 'Patient Phone', 'Attending Physician'
-      ],
-      'O': [
-        'Specimen ID', 'Instrument Specimen ID', 'Universal Test ID', 'Priority',
-        'Requested Date/Time', 'Collection Date/Time', 'Collection End Time',
-        'Collection Volume', 'Collector ID', 'Action Code', 'Danger Code',
-        'Relevant Clinical Info'
-      ],
-      'R': [
-        'Universal Test ID', 'Data Value', 'Units', 'Reference Range',
-        'Abnormal Flag', 'Nature of QC', 'Result Status', 'Date Changed',
-        'Operator ID', 'Date/Time Started', 'Date/Time Completed', 'Instrument ID'
-      ]
-    }
-
-    const definitions = fieldDefinitions[recordType] || []
-    const parsedFields = []
-
-    for (let i = 0; i < fields.length; i++) {
-      parsedFields.push({
-        name: definitions[i] || `${recordType} Field ${i + 1}`,
-        value: fields[i] || '',
-        position: i + 1
-      })
-    }
-
-    return parsedFields
-  }
-
-  detectASTMVersion(message) {
-    if (message.includes('E1381')) return 'E1381'
-    if (message.includes('E1394')) return 'E1394'
-    if (message.includes('E1238')) return 'E1238'
-    return null
-  }
-
-  formatASTM(records) {
-    return records.map(record => record.raw).join('\n')
   }
 
   parseJSON(message) {
-    try {
-      // Security: Limit message size to prevent DoS attacks
-      if (message.length > 10 * 1024 * 1024) { // 10MB limit
-        throw new Error('Message too large (max 10MB)')
+    if (message.length > MAX_INPUT) throw new Error('Message too large (max 10MB)')
+    const parsed = JSON.parse(message)
+    return {
+      format: 'json',
+      version: null,
+      formatted: JSON.stringify(parsed, null, 2),
+      analysis: {
+        type: Array.isArray(parsed) ? 'Array' : 'Object',
+        structure: this.analyzeJSONStructure(parsed),
+        detailedStructure: parsed,
+        size: message.length,
+        depth: this.calculateJSONDepth(parsed)
       }
-      
-      const parsed = JSON.parse(message)
-      
-      // Format JSON with proper indentation
-      const formatted = JSON.stringify(parsed, null, 2)
-      
-      return {
-        format: 'json',
-        version: null,
-        formatted: formatted,
-        analysis: {
-          type: Array.isArray(parsed) ? 'Array' : 'Object',
-          structure: this.analyzeJSONStructure(parsed),
-          detailedStructure: parsed,
-          size: message.length,
-          depth: this.calculateJSONDepth(parsed)
-        }
-      }
-    } catch (error) {
-      throw new Error(`JSON parsing error: ${error.message}`)
     }
   }
 
@@ -679,123 +661,42 @@ export class MessageParser {
   }
 
   parseXML(message) {
-    try {
-      // Security: Limit message size to prevent DoS attacks
-      if (message.length > 10 * 1024 * 1024) { // 10MB limit
-        throw new Error('Message too large (max 10MB)')
+    const { rootName, root } = this.parseXmlDocument(message)
+    return {
+      format: 'xml',
+      version: this.extractXMLVersion(message),
+      formatted: this.formatXML(message),
+      analysis: {
+        rootElement: rootName,
+        structure: this.analyzeXMLStructure(root),
+        detailedStructure: root,
+        elementCount: this.countXmlElements(message),
+        namespaces: Object.entries(root['@attributes'] || {}).filter(([k]) => k.startsWith('xmlns')).map(([k, v]) => `${k}="${v}"`)
       }
-      
-      const parser = new DOMParser()
-      const doc = parser.parseFromString(message, 'text/xml')
-      
-      if (doc.querySelector('parsererror')) {
-        throw new Error('Invalid XML format')
-      }
-
-      const formatted = this.formatXML(message)
-      const rootElement = doc.documentElement
-      
-      return {
-        format: 'xml',
-        version: this.extractXMLVersion(message),
-        formatted: formatted,
-        analysis: {
-          rootElement: rootElement.tagName,
-          structure: this.analyzeXMLStructure(rootElement),
-          detailedStructure: this.xmlToObject(rootElement),
-          elementCount: rootElement.querySelectorAll('*').length,
-          namespaces: this.extractXMLNamespaces(rootElement)
-        }
-      }
-    } catch (error) {
-      throw new Error(`XML parsing error: ${error.message}`)
     }
+  }
+
+  analyzeXMLStructure(node) {
+    return Object.entries(node).filter(([k]) => k !== '@attributes' && k !== '#text').flatMap(([name, value]) =>
+      [value].flat().map(child => ({
+        name,
+        attributes: Object.entries(child['@attributes'] || {}).map(([a, v]) => `${a}="${v}"`),
+        hasChildren: Object.keys(child).some(k => k !== '@attributes' && k !== '#text'),
+        textContent: xmlText(child).slice(0, 100)
+      })))
+  }
+
+  // ponytail: counts start tags with a regex; "<x" inside CDATA or comments is miscounted
+  countXmlElements(message) {
+    return (message.match(/<[A-Za-z_]/g) || []).length
+  }
+
+  formatXML(xml) {
+    return xml.replace(/>\s*</g, '>\n<').trim()
   }
 
   extractXMLVersion(message) {
     const versionMatch = message.match(/<\?xml[^>]+version\s*=\s*["']([^"']+)["']/i)
     return versionMatch ? versionMatch[1] : null
-  }
-
-  analyzeXMLStructure(element) {
-    const structure = []
-    const children = element.children
-    
-    for (const child of children) {
-      const childInfo = {
-        name: child.tagName,
-        attributes: Array.from(child.attributes).map(attr => `${attr.name}="${attr.value}"`),
-        hasChildren: child.children.length > 0,
-        textContent: child.textContent && child.textContent.trim().length > 0 ? child.textContent.trim().substring(0, 100) : ''
-      }
-      structure.push(childInfo)
-    }
-    
-    return structure.slice(0, 100) // Increased limit for complex data
-  }
-
-  extractXMLNamespaces(element) {
-    const namespaces = []
-    
-    for (const attr of element.attributes) {
-      if (attr.name.startsWith('xmlns')) {
-        namespaces.push(`${attr.name}="${attr.value}"`)
-      }
-    }
-    
-    return namespaces
-  }
-
-  formatXML(xml) {
-    try {
-      const parser = new DOMParser()
-      const doc = parser.parseFromString(xml, 'text/xml')
-      
-      if (doc.querySelector('parsererror')) {
-        return xml // Return original if parsing fails
-      }
-
-      const serializer = new XMLSerializer()
-      const formatted = serializer.serializeToString(doc)
-      
-      // Basic formatting
-      return formatted
-        .replace(/></g, '>\n<')
-        .replace(/^\s*\n/gm, '')
-    } catch (error) {
-      return xml // Return original if formatting fails
-    }
-  }
-
-  xmlToObject(element) {
-    const obj = {}
-    
-    // Add attributes
-    if (element.attributes.length > 0) {
-      obj['@attributes'] = {}
-      for (const attr of element.attributes) {
-        obj['@attributes'][attr.name] = attr.value
-      }
-    }
-    
-    // Add text content
-    if (element.childNodes.length === 1 && element.childNodes[0].nodeType === 3) {
-      obj['#text'] = element.textContent
-    } else {
-      // Add child elements
-      for (const child of element.children) {
-        const childObj = this.xmlToObject(child)
-        if (obj[child.tagName]) {
-          if (!Array.isArray(obj[child.tagName])) {
-            obj[child.tagName] = [obj[child.tagName]]
-          }
-          obj[child.tagName].push(childObj)
-        } else {
-          obj[child.tagName] = childObj
-        }
-      }
-    }
-    
-    return obj
   }
 }

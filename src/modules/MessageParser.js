@@ -444,42 +444,67 @@ export class MessageParser {
   }
 
   parseFHIR(message) {
-    try {
-      let parsed
-      let isXML = false
-      
-      if (message.trim().startsWith('<')) {
-        isXML = true
-        const parser = new DOMParser()
-        const doc = parser.parseFromString(message, 'text/xml')
-        
-        if (doc.querySelector('parsererror')) {
-          throw new Error('Invalid XML format')
-        }
-        
-        parsed = this.xmlToObject(doc.documentElement)
-      } else {
-        parsed = JSON.parse(message)
-      }
-
-      const resourceType = parsed.resourceType || parsed.name || 'Unknown'
-      const formatted = isXML ? this.formatXML(message) : JSON.stringify(parsed, null, 2)
-      
-      return {
-        format: 'fhir',
-        version: this.extractFHIRVersion(message),
-        formatted: formatted,
-        analysis: {
-          resourceType: resourceType,
-          description: this.fhirResourceTypes[resourceType] || 'Unknown resource type',
-          structure: this.analyzeFHIRStructure(parsed),
-          detailedStructure: parsed,
-          fieldCount: Object.keys(parsed).length
-        }
-      }
-    } catch (error) {
-      throw new Error(`FHIR parsing error: ${error.message}`)
+    if (message.length > MAX_INPUT) throw new Error('Message too large (max 10MB)')
+    const isXML = message.trim().startsWith('<')
+    let resource
+    if (isXML) {
+      const { rootName, root } = this.parseXmlDocument(message)
+      resource = { resourceType: rootName, ...this.fhirXmlToJson(root) }
+    } else {
+      resource = JSON.parse(message)
     }
+    const resourceType = resource.resourceType || 'Unknown'
+    const analysis = {
+      resourceType,
+      description: this.fhirResourceTypes[resourceType] || 'Unknown resource type',
+      detailedStructure: resource,
+      fieldCount: Object.keys(resource).length,
+      patientName: this.fhirPatient(resource)
+    }
+    if (resourceType === 'Bundle') {
+      const entries = [resource.entry].flat().filter(Boolean)
+      resource.entry = entries
+      analysis.bundleType = resource.type || null
+      analysis.entryCount = entries.length
+      analysis.resourceCounts = {}
+      for (const e of entries) {
+        const t = e.resource?.resourceType || 'Unknown'
+        analysis.resourceCounts[t] = (analysis.resourceCounts[t] || 0) + 1
+      }
+      analysis.patientName = this.fhirPatient(entries.find(e => e.resource?.resourceType === 'Patient')?.resource || {})
+    }
+    return {
+      format: 'fhir',
+      version: this.extractFHIRVersion(message),
+      formatted: isXML ? this.formatXML(message) : JSON.stringify(resource, null, 2),
+      analysis
+    }
+  }
+
+  // ponytail: no StructureDefinition cardinality, so an XML element that occurs once stays an object (JSON would use an array)
+  fhirXmlToJson(node) {
+    if (Array.isArray(node)) return node.map(n => this.fhirXmlToJson(n))
+    if (typeof node !== 'object' || node === null) return node
+    const { '@attributes': { xmlns, value, ...attrs } = {}, '#text': text, ...children } = node
+    const kids = Object.fromEntries(Object.entries(children).map(([k, v]) => {
+      const converted = this.fhirXmlToJson(v)
+      // <resource><Patient>…</Patient></resource> → resource: { resourceType: 'Patient', … }
+      if ((k === 'resource' || k === 'contained') && !Array.isArray(v) && Object.keys(children[k]).length === 1) {
+        const [type] = Object.keys(v)
+        return [k, { resourceType: type, ...converted[type] }]
+      }
+      return [k, converted]
+    }))
+    if (value !== undefined && !Object.keys(kids).length && !Object.keys(attrs).length) return value
+    return { ...attrs, ...(value !== undefined && { value }), ...kids, ...(text && { '#text': text }) }
+  }
+
+  fhirPatient(r) {
+    if (r.resourceType === 'Patient') {
+      const n = [r.name].flat()[0]
+      return n ? (n.text || [...[n.given].flat(), n.family].filter(Boolean).join(' ')) || null : null
+    }
+    return r.subject?.display || r.subject?.reference || r.patient?.display || r.patient?.reference || null
   }
 
   extractFHIRVersion(message) {
@@ -492,36 +517,6 @@ export class MessageParser {
       return version
     }
     return null
-  }
-
-  analyzeFHIRStructure(resource) {
-    const structure = []
-    
-    for (const [key, value] of Object.entries(resource)) {
-      if (key === 'resourceType') continue
-      
-      const field = {
-        name: key,
-        type: Array.isArray(value) ? 'array' : typeof value,
-        value: this.formatFHIRValue(value)
-      }
-      
-      structure.push(field)
-    }
-    
-    return structure.slice(0, 100) // Increased limit for complex data
-  }
-
-  formatFHIRValue(value) {
-    if (Array.isArray(value)) {
-      return `Array(${value.length})`
-    } else if (typeof value === 'object' && value !== null) {
-      return `Object with ${Object.keys(value).length} properties`
-    } else if (typeof value === 'string' && value.length > 50) {
-      return value.substring(0, 50) + '...'
-    } else {
-      return String(value)
-    }
   }
 
   // ponytail: E1381 link-layer is only unwrapped (STX/FN/ETB/ETX/checksum); checksums are not verified

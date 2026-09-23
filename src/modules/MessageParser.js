@@ -3,10 +3,28 @@ import { HL7_SEGMENT_FIELDS, HL7_DATATYPE_COMPONENTS } from './hl7v2Definitions.
 
 const HL7_HEADERS = new Set(['MSH', 'FHS', 'BHS'])
 const MAX_INPUT = 10 * 1024 * 1024 // 10MB: DoS guard for XML/JSON
+// preserveOrder keeps text and child elements in document order, so mixed narrative reads correctly
 const xmlParser = new XMLParser({
-  ignoreAttributes: false, attributesGroupName: '@attributes', attributeNamePrefix: '',
-  textNodeName: '#text', alwaysCreateTextNode: true, parseTagValue: false, parseAttributeValue: false
+  ignoreAttributes: false, attributeNamePrefix: '', preserveOrder: true, trimValues: false,
+  parseTagValue: false, parseAttributeValue: false
 })
+const xmlFlatText = nodes => nodes.map(n => '#text' in n ? n['#text'] : xmlFlatText(n[Object.keys(n).find(k => k !== ':@')] || [])).join('')
+
+// Ordered nodes → { tag: child | child[], '@attributes': {…}, '#text': in-order text of mixed/leaf elements }
+const xmlToTree = nodes => {
+  const obj = {}
+  for (const n of nodes) {
+    if ('#text' in n) continue
+    const tag = Object.keys(n).find(k => k !== ':@')
+    const child = xmlToTree(n[tag] || [])
+    if (n[':@']) child['@attributes'] = n[':@']
+    obj[tag] = tag in obj ? [...[obj[tag]].flat(), child] : child
+  }
+  const hasText = nodes.some(n => '#text' in n && /\S/.test(n['#text']))
+  const hasChildren = nodes.some(n => !('#text' in n))
+  if (hasText || !hasChildren) obj['#text'] = xmlFlatText(nodes).replace(/\s+/g, ' ').trim()
+  return obj
+}
 const xmlText = n => (typeof n === 'object' ? n?.['#text'] : n) ?? ''
 
 export class MessageParser {
@@ -362,14 +380,16 @@ export class MessageParser {
     }
   }
 
-  // HL7 (\F\ \S\ \T\ \R\ \E\ \.br\ \Xhh\) and ASTM (&F& &S& &R& &E&) escape sequences
+  // HL7 (\F\ \S\ \T\ \R\ \E\ \.br\ \.sp\ \H\ \N\ \Xhh\) and ASTM (&F& &S& &R& &E&) escape sequences
   decodeEscapes(value, d) {
     if (!value.includes(d.escape)) return value
     const e = d.escape.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const map = { F: d.field, S: d.component, T: d.subcomponent, R: d.repetition, E: d.escape }
     return value.replace(new RegExp(`${e}([^${e}]*)${e}`, 'g'), (match, code) =>
-      map[code] ?? (code === '.br' ? '\n'
+      map[code] ?? (/^\.(br|sp)/.test(code) ? '\n'
         : /^X([0-9A-Fa-f]{2})+$/.test(code) ? String.fromCharCode(...code.slice(1).match(/../g).map(h => parseInt(h, 16)))
+        // highlight on/off, other formatting commands (.in .ti .sk .ce .fi .nf) and locally defined \Z..\ carry no text
+        : /^([HN]|\..*|Z.*)$/.test(code) ? ''
         : match))
   }
 
@@ -394,7 +414,7 @@ export class MessageParser {
     if (message.length > MAX_INPUT) throw new Error('Message too large (max 10MB)')
     const valid = XMLValidator.validate(message)
     if (valid !== true) throw new Error(`Invalid XML: ${valid.err.msg} (line ${valid.err.line})`)
-    const doc = xmlParser.parse(message)
+    const doc = xmlToTree(xmlParser.parse(message))
     const rootName = Object.keys(doc).find(k => !k.startsWith('?'))
     return { rootName, root: doc[rootName] }
   }

@@ -106,3 +106,9 @@ test('custom encoding characters from MSH-2 are honored', () => {
 test('patient name summary comes from PID-5', () => {
   assert.equal(p.parse(ADT.join('\r'), 'hl7v2').analysis.patientName, 'JOHN DOE')
 })
+
+test('HL7 formatting escapes do not leak into values', () => {
+  const msg = ['MSH|^~\\&|A|B|C|D|20240101||ORU^R01|1|P|2.5.1', 'OBX|1|FT|A||\\H\\bold\\N\\ text\\.sp\\x \\Zfoo\\end'].join('\r')
+  const tree = p.parse(msg, 'hl7v2').analysis.detailedStructure
+  assert.equal(tree['OBX - Observation/Result']['OBX-5 Observation Value'], 'bold text\nx end')
+})

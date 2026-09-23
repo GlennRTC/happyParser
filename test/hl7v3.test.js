@@ -35,7 +35,7 @@ test('the tree reaches the deepest entry and keeps mixed narrative text and <nam
   const t = p.parse(CCD, 'hl7v3').analysis.detailedStructure
   const section = t.component.structuredBody.component[0].section
   assert.equal(section.entry.act.entryRelationship.observation.entryRelationship.observation.value['@attributes'].code, 'X')
-  assert.match(section.text['#text'], /No known/)
+  assert.equal(section.text['#text'], 'No known allergies')
   assert.equal(t.recordTarget.patientRole.patient.name.family['#text'], 'Roe')
 })
 
@@ -55,4 +55,9 @@ test('generic XML keeps namespaces and counts elements', () => {
   assert.deepEqual(r.analysis.namespaces, ['xmlns:a="urn:a"'])
   assert.equal(r.analysis.elementCount, 3)
   assert.equal(r.analysis.detailedStructure['a:item'].length, 2)
+})
+
+test('mixed narrative keeps every word in document order', () => {
+  const r = p.parse('<ClinicalDocument xmlns="urn:hl7-org:v3"><text>No known <content ID="a1">drug</content> allergies.</text></ClinicalDocument>', 'hl7v3')
+  assert.equal(r.analysis.detailedStructure.text['#text'], 'No known drug allergies.')
 })

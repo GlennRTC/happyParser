@@ -510,7 +510,7 @@ export class UIController {
 
     // Check if this is a table structure and process it specially
     if (this.isTableStructure(item)) {
-      return this.processTableStructure(item, parentKey, depth)
+      return this.processTableStructure(item, parentKey)
     }
 
     const result = {
@@ -748,133 +748,40 @@ export class UIController {
     return false
   }
 
-  processTableStructure(item, parentKey, depth) {
-    const result = {
+  processTableStructure(item, parentKey) {
+    const list = v => [v].flat().filter(Boolean)
+    const rowsOf = section => list(item[section]).flatMap(s => list(s.tr))
+    const cellsOf = row => [...list(row.th), ...list(row.td)]
+    const bodyRows = [...list(item.tr), ...rowsOf('tbody'), ...rowsOf('tfoot')]
+    const headRow = rowsOf('thead')[0] || (bodyRows[0] && !bodyRows[0].td ? bodyRows.shift() : null)
+    const headers = headRow ? cellsOf(headRow).map(c => this.extractTextContent(c)) : []
+
+    return {
       key: this.getContextualFriendlyName(parentKey) || 'Table',
       type: 'table',
-      children: []
+      value: item.caption ? this.extractTextContent(item.caption) : undefined,
+      children: bodyRows.map((row, rowIndex) => ({
+        key: `Row ${rowIndex + 1}`,
+        type: 'tableRow',
+        children: cellsOf(row).map((cell, cellIndex) => {
+          const text = this.extractTextContent(cell)
+          return { key: headers[cellIndex] || `Column ${cellIndex + 1}`, value: text, type: this.getDataType(text), children: [] }
+        })
+      }))
     }
-
-    // Extract table attributes if available
-    if (item['@attributes']) {
-      const attrs = item['@attributes']
-      let tableInfo = []
-      if (attrs.border) tableInfo.push(`border="${attrs.border}"`)
-      if (attrs.width) tableInfo.push(`width="${attrs.width}"`)
-      if (tableInfo.length > 0) {
-        result.value = tableInfo.join(', ')
-      }
-    }
-
-    // Process table headers
-    let headers = []
-    if (item.thead && item.thead.tr) {
-      const headerRow = Array.isArray(item.thead.tr) ? item.thead.tr[0] : item.thead.tr
-      if (headerRow.th) {
-        headers = Array.isArray(headerRow.th) ? 
-                 headerRow.th.map(th => this.extractTextContent(th)) :
-                 [this.extractTextContent(headerRow.th)]
-      }
-    }
-
-    // Process table body and create key-value pairs
-    if (item.tbody && item.tbody.tr) {
-      const rows = Array.isArray(item.tbody.tr) ? item.tbody.tr : [item.tbody.tr]
-      
-      rows.forEach((row, rowIndex) => {
-        if (row.td) {
-          const cells = Array.isArray(row.td) ? row.td : [row.td]
-          
-          // Create a row node
-          const rowNode = {
-            key: `Row ${rowIndex + 1}`,
-            type: 'tableRow',
-            children: []
-          }
-
-          // Map cells to headers for key-value pairs
-          cells.forEach((cell, cellIndex) => {
-            const cellContent = this.extractTextContent(cell)
-            const header = headers[cellIndex] || `Column ${cellIndex + 1}`
-            
-            // Create key-value pair like "Test: NEUT%"
-            rowNode.children.push({
-              key: header,
-              value: cellContent,
-              type: this.getDataType(cellContent),
-              children: []
-            })
-          })
-
-          result.children.push(rowNode)
-        }
-      })
-    }
-
-    // If no tbody but direct tr elements
-    else if (item.tr) {
-      const rows = Array.isArray(item.tr) ? item.tr : [item.tr]
-      
-      rows.forEach((row, rowIndex) => {
-        // Skip header row if it exists
-        if (rowIndex === 0 && row.th) {
-          if (!headers.length) {
-            headers = Array.isArray(row.th) ? 
-                     row.th.map(th => this.extractTextContent(th)) :
-                     [this.extractTextContent(row.th)]
-          }
-          return
-        }
-
-        if (row.td) {
-          const cells = Array.isArray(row.td) ? row.td : [row.td]
-          
-          const rowNode = {
-            key: `Row ${rowIndex + (headers.length ? 0 : 1)}`,
-            type: 'tableRow',
-            children: []
-          }
-
-          cells.forEach((cell, cellIndex) => {
-            const cellContent = this.extractTextContent(cell)
-            const header = headers[cellIndex] || `Column ${cellIndex + 1}`
-            
-            rowNode.children.push({
-              key: header,
-              value: cellContent,
-              type: this.getDataType(cellContent),
-              children: []
-            })
-          })
-
-          result.children.push(rowNode)
-        }
-      })
-    }
-
-    return result
   }
 
+  // '#text' already holds the in-order text of mixed content; otherwise join the descendants' text
   extractTextContent(element) {
-    if (typeof element === 'string') {
-      return element.trim()
-    }
-    if (typeof element === 'object' && element !== null) {
-      if (element['#text']) {
-        return element['#text'].trim()
-      }
-      if (element.textContent) {
-        return element.textContent.trim()
-      }
-      // If it's an object, try to extract meaningful content
-      const values = Object.values(element).filter(v => 
-        typeof v === 'string' && v.trim().length > 0
-      )
-      if (values.length > 0) {
-        return values[0].trim()
-      }
-    }
-    return String(element).trim()
+    if (element === null || element === undefined) return ''
+    if (typeof element !== 'object') return String(element).trim()
+    if (Array.isArray(element)) return element.map(e => this.extractTextContent(e)).filter(Boolean).join(' ')
+    if (element['#text']) return element['#text'].trim()
+    return Object.entries(element)
+      .filter(([key]) => key !== '@attributes')
+      .map(([, value]) => this.extractTextContent(value))
+      .filter(Boolean)
+      .join(' ')
   }
 
   escapeHtml(text) {

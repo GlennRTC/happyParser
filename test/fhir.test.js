@@ -42,3 +42,8 @@ test('FHIR XML Bundle: resource wrappers become resourceType, entry is always an
   assert.equal(a.detailedStructure.entry[0].resource.resourceType, 'Patient')
   assert.deepEqual(a.resourceCounts, { Patient: 1 })
 })
+
+test('FHIR XML narrative div keeps text in order', () => {
+  const xml = '<Patient xmlns="http://hl7.org/fhir"><text><div xmlns="http://www.w3.org/1999/xhtml"><p>Hello <b>World</b> end</p></div></text></Patient>'
+  assert.equal(p.parse(xml, 'fhir').analysis.detailedStructure.text.div.p['#text'], 'Hello World end')
+})

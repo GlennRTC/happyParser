@@ -63,3 +63,46 @@ test('version and message type come from MSH-12 and MSH-9', () => {
 test('a message without MSH is rejected', () => {
   assert.throws(() => p.parse('PID|1||X', 'hl7v2'), /No MSH segment/)
 })
+
+test('components, repetitions and subcomponents are mapped by name', () => {
+  const tree = p.parse(ADT.join('\r'), 'hl7v2').analysis.detailedStructure
+  const pid = tree['PID - Patient Identification']
+  assert.equal(pid['PID-5 Patient Name']['PID-5.1 Family Name'], 'DOE')
+  assert.equal(pid['PID-5 Patient Name']['PID-5.2 Given Name'], 'JOHN')
+  assert.equal(pid['PID-3 Patient Identifier List'].length, 2)
+  assert.equal(pid['PID-3 Patient Identifier List'][1]['PID-3.1 ID Number'], 'M2')
+  assert.equal(pid['PID-11 Patient Address']['PID-11.3 City'], 'Springfield')
+  assert.equal(tree['PV1 - Patient Visit']['PV1-3 Assigned Patient Location']['PV1-3.2 Room'], '101')
+  assert.equal(tree['PV1 - Patient Visit']['PV1-44 Admit Date/Time'], '20240101120000')
+  assert.equal(tree['MSH - Message Header']['MSH-2 Encoding Characters'], '^~\\&')
+  assert.equal('PID-2 Patient ID' in pid, false) // empty fields are omitted from the tree
+})
+
+test('subcomponents split on &', () => {
+  const msg = ['MSH|^~\\&|A|B|C|D|20240101||ORU^R01|1|P|2.5.1', 'PID|1||123^^^HOSP&1.2.3&ISO^MR'].join('\r')
+  const cx = p.parse(msg, 'hl7v2').analysis.detailedStructure['PID - Patient Identification']['PID-3 Patient Identifier List']
+  assert.deepEqual(cx['PID-3.4 Assigning Authority'], { 'PID-3.4.1': 'HOSP', 'PID-3.4.2': '1.2.3', 'PID-3.4.3': 'ISO' })
+})
+
+test('repeated segments are kept separately', () => {
+  const tree = p.parse(ADT.join('\r'), 'hl7v2').analysis.detailedStructure
+  assert.equal(tree['OBX #1 - Observation/Result']['OBX-5 Observation Value'], '95')
+  assert.ok(tree['OBX #2 - Observation/Result'])
+  assert.ok(tree['PID - Patient Identification']) // single segments carry no #n
+})
+
+test('HL7 escape sequences are decoded', () => {
+  const tree = p.parse(ADT.join('\r'), 'hl7v2').analysis.detailedStructure
+  assert.equal(tree['OBX #2 - Observation/Result']['OBX-5 Observation Value'], 'Line1\nLine2 & more')
+})
+
+test('custom encoding characters from MSH-2 are honored', () => {
+  const msg = ['MSH|*~\\&|A|B|C|D|20240101||ADT*A08|1|P|2.5', 'PID|1||X1||ROE*JANE'].join('\r')
+  const r = p.parse(msg, 'hl7v2')
+  assert.equal(r.analysis.detailedStructure['PID - Patient Identification']['PID-5 Patient Name']['PID-5.2 Given Name'], 'JANE')
+  assert.equal(r.analysis.messageType, 'ADT^A08 - Admission, discharge, transfer')
+})
+
+test('patient name summary comes from PID-5', () => {
+  assert.equal(p.parse(ADT.join('\r'), 'hl7v2').analysis.patientName, 'JOHN DOE')
+})

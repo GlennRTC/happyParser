@@ -307,6 +307,20 @@ export class MessageParser {
       }
     })
 
+    const detailedStructure = Object.fromEntries(segments.map(seg => [
+      `${seg.type}${counts[seg.type] > 1 ? ' #' + seg.index : ''} - ${seg.name}`,
+      Object.fromEntries(seg.fields.filter(f => f.value !== '').map(f => {
+        const label = `${seg.type}-${f.position}`
+        const key = f.name === label ? label : `${label} ${f.name}`
+        const isEncoding = HL7_HEADERS.has(seg.type) && f.position <= 2
+        return [key, isEncoding ? f.value : this.fieldTree(f.value, d, label, HL7_DATATYPE_COMPONENTS[f.dataType])]
+      }))
+    ]))
+
+    const pidName = segments.find(s => s.type === 'PID')?.fields[4]?.value || ''
+    const [family = '', given = ''] = pidName.split(d.repetition)[0].split(d.component).map(v => this.decodeEscapes(v, d))
+    const patientName = [given, family].filter(Boolean).join(' ') || null
+
     const msh = segments.find(s => s.type === 'MSH').fields
     const [code = '', event = ''] = (msh[8]?.value || '').split(d.component)
     const version = (msh[11]?.value || '').split(d.component)[0]
@@ -319,9 +333,39 @@ export class MessageParser {
         messageType: `${code}${event ? '^' + event : ''} - ${this.hl7MessageTypes[code] || 'Unknown'}`,
         segments: segments.map(seg => ({ name: `${seg.type} - ${seg.name}`, type: seg.type, index: seg.index, fields: seg.fields })),
         segmentCount: segments.length,
-        version
+        version,
+        patientName,
+        detailedStructure
       }
     }
+  }
+
+  // HL7 (\F\ \S\ \T\ \R\ \E\ \.br\ \Xhh\) and ASTM (&F& &S& &R& &E&) escape sequences
+  decodeEscapes(value, d) {
+    if (!value.includes(d.escape)) return value
+    const e = d.escape.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const map = { F: d.field, S: d.component, T: d.subcomponent, R: d.repetition, E: d.escape }
+    return value.replace(new RegExp(`${e}([^${e}]*)${e}`, 'g'), (match, code) =>
+      map[code] ?? (code === '.br' ? '\n'
+        : /^X([0-9A-Fa-f]{2})+$/.test(code) ? String.fromCharCode(...code.slice(1).match(/../g).map(h => parseInt(h, 16)))
+        : match))
+  }
+
+  // One field → decoded string, or { 'PID-5.1 Family Name': … } for components, or an array for repetitions
+  fieldTree(raw, d, label, compNames = []) {
+    const sub = (value, subLabel) => {
+      const parts = d.subcomponent ? value.split(d.subcomponent) : [value]
+      if (parts.length === 1) return this.decodeEscapes(value, d)
+      return Object.fromEntries(parts.map((s, i) => [`${subLabel}.${i + 1}`, this.decodeEscapes(s, d)]).filter(([, v]) => v !== ''))
+    }
+    const reps = raw.split(d.repetition).map(rep => {
+      const comps = rep.split(d.component)
+      if (comps.length === 1) return sub(rep, `${label}.1`)
+      return Object.fromEntries(comps
+        .map((c, i) => [`${label}.${i + 1}${compNames[i] ? ' ' + compNames[i] : ''}`, sub(c, `${label}.${i + 1}`)])
+        .filter(([, v]) => v !== ''))
+    })
+    return reps.length === 1 ? reps[0] : reps
   }
 
   parseHL7v3(message) {

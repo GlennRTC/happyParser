@@ -1,6 +1,13 @@
+import { XMLParser, XMLValidator } from 'fast-xml-parser'
 import { HL7_SEGMENT_FIELDS, HL7_DATATYPE_COMPONENTS } from './hl7v2Definitions.js'
 
 const HL7_HEADERS = new Set(['MSH', 'FHS', 'BHS'])
+const MAX_INPUT = 10 * 1024 * 1024 // 10MB: DoS guard for XML/JSON
+const xmlParser = new XMLParser({
+  ignoreAttributes: false, attributesGroupName: '@attributes', attributeNamePrefix: '',
+  textNodeName: '#text', alwaysCreateTextNode: true, parseTagValue: false, parseAttributeValue: false
+})
+const xmlText = n => (typeof n === 'object' ? n?.['#text'] : n) ?? ''
 
 export class MessageParser {
   constructor() {
@@ -404,57 +411,36 @@ export class MessageParser {
     return reps.length === 1 ? reps[0] : reps
   }
 
-  parseHL7v3(message) {
-    try {
-      const parser = new DOMParser()
-      const doc = parser.parseFromString(message, 'text/xml')
-      
-      if (doc.querySelector('parsererror')) {
-        throw new Error('Invalid XML format')
-      }
-
-      const rootElement = doc.documentElement
-      const formatted = this.formatXML(message)
-      
-      // Extract basic information
-      const templateId = rootElement.getAttribute('templateId') || 
-                        rootElement.querySelector('templateId')?.getAttribute('root') || ''
-      const code = rootElement.getAttribute('code') || 
-                   rootElement.querySelector('code')?.getAttribute('code') || ''
-      
-      return {
-        format: 'hl7v3',
-        version: 'CDA',
-        formatted: formatted,
-        analysis: {
-          documentType: rootElement.tagName,
-          templateId: templateId,
-          code: code,
-          structure: this.analyzeHL7v3Structure(rootElement),
-          detailedStructure: this.xmlToObject(rootElement),
-          elementCount: rootElement.querySelectorAll('*').length
-        }
-      }
-    } catch (error) {
-      throw new Error(`HL7 v3 parsing error: ${error.message}`)
-    }
+  parseXmlDocument(message) {
+    if (message.length > MAX_INPUT) throw new Error('Message too large (max 10MB)')
+    const valid = XMLValidator.validate(message)
+    if (valid !== true) throw new Error(`Invalid XML: ${valid.err.msg} (line ${valid.err.line})`)
+    const doc = xmlParser.parse(message)
+    const rootName = Object.keys(doc).find(k => !k.startsWith('?'))
+    return { rootName, root: doc[rootName] }
   }
 
-  analyzeHL7v3Structure(element) {
-    const structure = []
-    const children = element.children
-    
-    for (const child of children) {
-      const childInfo = {
-        name: child.tagName,
-        attributes: Array.from(child.attributes).map(attr => `${attr.name}="${attr.value}"`),
-        hasChildren: child.children.length > 0,
-        textContent: child.textContent && child.textContent.trim().length > 0 ? child.textContent.trim().substring(0, 100) : ''
+  parseHL7v3(message) {
+    const { rootName, root } = this.parseXmlDocument(message)
+    const attr = (node, a) => [node].flat()[0]?.['@attributes']?.[a]
+    const templateIds = [root.templateId].flat().map(t => attr(t, 'root')).filter(Boolean)
+    const isCda = rootName.endsWith('ClinicalDocument')
+    // ponytail: paths assume the default CDA namespace (no "cda:" prefixes); prefixed docs still parse, only the summary is empty
+    const name = [[root.recordTarget].flat()[0]?.patientRole?.patient?.name].flat()[0]
+    return {
+      format: 'hl7v3',
+      version: !isCda ? 'V3 Messaging' : templateIds.some(t => t.startsWith('2.16.840.1.113883.10.20.22')) ? 'C-CDA' : 'CDA R2',
+      formatted: this.formatXML(message),
+      analysis: {
+        documentType: xmlText(root.title) || rootName,
+        templateId: templateIds.join(', '),
+        code: attr(root.code, 'code') || '',
+        patientName: name ? [...[name.given].flat().map(xmlText), xmlText(name.family)].filter(Boolean).join(' ') : null,
+        sectionCount: [root.component?.structuredBody?.component].flat().filter(Boolean).length,
+        detailedStructure: root,
+        elementCount: this.countXmlElements(message)
       }
-      structure.push(childInfo)
     }
-    
-    return structure.slice(0, 100) // Increased limit for table data
   }
 
   parseFHIR(message) {
@@ -693,123 +679,42 @@ export class MessageParser {
   }
 
   parseXML(message) {
-    try {
-      // Security: Limit message size to prevent DoS attacks
-      if (message.length > 10 * 1024 * 1024) { // 10MB limit
-        throw new Error('Message too large (max 10MB)')
+    const { rootName, root } = this.parseXmlDocument(message)
+    return {
+      format: 'xml',
+      version: this.extractXMLVersion(message),
+      formatted: this.formatXML(message),
+      analysis: {
+        rootElement: rootName,
+        structure: this.analyzeXMLStructure(root),
+        detailedStructure: root,
+        elementCount: this.countXmlElements(message),
+        namespaces: Object.entries(root['@attributes'] || {}).filter(([k]) => k.startsWith('xmlns')).map(([k, v]) => `${k}="${v}"`)
       }
-      
-      const parser = new DOMParser()
-      const doc = parser.parseFromString(message, 'text/xml')
-      
-      if (doc.querySelector('parsererror')) {
-        throw new Error('Invalid XML format')
-      }
-
-      const formatted = this.formatXML(message)
-      const rootElement = doc.documentElement
-      
-      return {
-        format: 'xml',
-        version: this.extractXMLVersion(message),
-        formatted: formatted,
-        analysis: {
-          rootElement: rootElement.tagName,
-          structure: this.analyzeXMLStructure(rootElement),
-          detailedStructure: this.xmlToObject(rootElement),
-          elementCount: rootElement.querySelectorAll('*').length,
-          namespaces: this.extractXMLNamespaces(rootElement)
-        }
-      }
-    } catch (error) {
-      throw new Error(`XML parsing error: ${error.message}`)
     }
+  }
+
+  analyzeXMLStructure(node) {
+    return Object.entries(node).filter(([k]) => k !== '@attributes' && k !== '#text').flatMap(([name, value]) =>
+      [value].flat().map(child => ({
+        name,
+        attributes: Object.entries(child['@attributes'] || {}).map(([a, v]) => `${a}="${v}"`),
+        hasChildren: Object.keys(child).some(k => k !== '@attributes' && k !== '#text'),
+        textContent: xmlText(child).slice(0, 100)
+      })))
+  }
+
+  // ponytail: counts start tags with a regex; "<x" inside CDATA or comments is miscounted
+  countXmlElements(message) {
+    return (message.match(/<[A-Za-z_]/g) || []).length
+  }
+
+  formatXML(xml) {
+    return xml.replace(/>\s*</g, '>\n<').trim()
   }
 
   extractXMLVersion(message) {
     const versionMatch = message.match(/<\?xml[^>]+version\s*=\s*["']([^"']+)["']/i)
     return versionMatch ? versionMatch[1] : null
-  }
-
-  analyzeXMLStructure(element) {
-    const structure = []
-    const children = element.children
-    
-    for (const child of children) {
-      const childInfo = {
-        name: child.tagName,
-        attributes: Array.from(child.attributes).map(attr => `${attr.name}="${attr.value}"`),
-        hasChildren: child.children.length > 0,
-        textContent: child.textContent && child.textContent.trim().length > 0 ? child.textContent.trim().substring(0, 100) : ''
-      }
-      structure.push(childInfo)
-    }
-    
-    return structure.slice(0, 100) // Increased limit for complex data
-  }
-
-  extractXMLNamespaces(element) {
-    const namespaces = []
-    
-    for (const attr of element.attributes) {
-      if (attr.name.startsWith('xmlns')) {
-        namespaces.push(`${attr.name}="${attr.value}"`)
-      }
-    }
-    
-    return namespaces
-  }
-
-  formatXML(xml) {
-    try {
-      const parser = new DOMParser()
-      const doc = parser.parseFromString(xml, 'text/xml')
-      
-      if (doc.querySelector('parsererror')) {
-        return xml // Return original if parsing fails
-      }
-
-      const serializer = new XMLSerializer()
-      const formatted = serializer.serializeToString(doc)
-      
-      // Basic formatting
-      return formatted
-        .replace(/></g, '>\n<')
-        .replace(/^\s*\n/gm, '')
-    } catch (error) {
-      return xml // Return original if formatting fails
-    }
-  }
-
-  xmlToObject(element) {
-    const obj = {}
-    
-    // Add attributes
-    if (element.attributes.length > 0) {
-      obj['@attributes'] = {}
-      for (const attr of element.attributes) {
-        obj['@attributes'][attr.name] = attr.value
-      }
-    }
-    
-    // Add text content
-    if (element.childNodes.length === 1 && element.childNodes[0].nodeType === 3) {
-      obj['#text'] = element.textContent
-    } else {
-      // Add child elements
-      for (const child of element.children) {
-        const childObj = this.xmlToObject(child)
-        if (obj[child.tagName]) {
-          if (!Array.isArray(obj[child.tagName])) {
-            obj[child.tagName] = [obj[child.tagName]]
-          }
-          obj[child.tagName].push(childObj)
-        } else {
-          obj[child.tagName] = childObj
-        }
-      }
-    }
-    
-    return obj
   }
 }

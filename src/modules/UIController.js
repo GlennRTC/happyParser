@@ -2,8 +2,8 @@ export class UIController {
   constructor() {
     this.currentResult = null
     this.itemCount = 0
-    this.maxItems = 1000
-    this.maxDepth = 15
+    this.maxItems = 5000
+    this.maxDepth = 40
     this.priorityFields = new Set([
       'resourceType', 'id', 'status', 'code', 'name', 'type', 'value', 
       'system', 'display', 'reference', 'url', 'version', 'title'
@@ -97,6 +97,13 @@ export class UIController {
       }
     }
     
+    if (this.itemCount >= this.maxItems) {
+      const note = document.createElement('div')
+      note.className = 'analysis-item text-xs text-gray-500'
+      note.textContent = `Showing the first ${this.maxItems} items. The Formatted tab has the complete message.`
+      analysisContent.appendChild(note)
+    }
+
     // Update count badge
     analysisCount.textContent = `${this.itemCount} items`
   }
@@ -114,7 +121,7 @@ export class UIController {
         </svg>
         <h4 class="font-semibold text-blue-800 dark:text-blue-200">Clinical Summary</h4>
       </div>
-      <p class="text-blue-700 dark:text-blue-300">${summaryText}</p>
+      <p class="text-blue-700 dark:text-blue-300">${this.escapeHtml(summaryText)}</p>
     `
     
     const analysisContent = document.getElementById('analysisContent')
@@ -138,59 +145,24 @@ export class UIController {
         return this.generateJSONSummary(analysis)
       case 'xml':
         return this.generateXMLSummary(analysis)
+      case 'astm':
+        return this.generateASTMSummary(analysis)
       default:
         return this.generateGenericSummary(analysis)
     }
   }
 
   generateCCDASummary(analysis) {
-    const patientName = this.extractPatientName(analysis)
-    const docType = analysis.documentType || analysis.resourceType || 'Clinical Document'
-    const sections = this.countClinicalSections(analysis)
-    
-    let summary = `Patient: ${patientName || 'Not specified'}, Document: ${docType}`
-    if (sections > 0) {
-      summary += `, ${sections} clinical sections`
-    }
-    if (analysis.recordCount) {
-      summary += `, ${analysis.recordCount} records`
-    }
+    let summary = `Patient: ${analysis.patientName || 'Not specified'}, Document: ${analysis.documentType || 'Clinical Document'}`
+    if (analysis.sectionCount) summary += `, ${analysis.sectionCount} clinical sections`
     return summary
   }
 
   generateFHIRSummary(analysis) {
-    const resourceType = analysis.resourceType || 'FHIR Resource'
-    
-    if (resourceType === 'Bundle') {
-      // Find bundle data from the structure
-      const bundleType = this.findNestedValue(analysis.structure, 'type') || 'collection'
-      const entryArray = this.findNestedValue(analysis.structure, 'entry')
-      const entryCount = Array.isArray(entryArray) ? entryArray.length : 0
-      
-      // Count different resource types in the bundle entries
-      const resourceCounts = this.countBundleResourcesFromStructure(analysis.structure)
-      const resourceSummary = Object.entries(resourceCounts)
-        .map(([type, count]) => `${count} ${type}${count > 1 ? 's' : ''}`)
-        .join(', ')
-      
-      return `Bundle: ${bundleType} with ${entryCount} entries (${resourceSummary || 'mixed resources'})`
-    } else {
-      const patientRef = this.extractPatientReference(analysis)
-      const observations = this.countFHIRResources(analysis, 'observation')
-      const medications = this.countFHIRResources(analysis, 'medication')
-      
-      let summary = `Resource: ${resourceType}`
-      if (patientRef) {
-        summary += `, Patient: ${patientRef}`
-      }
-      if (observations > 0) {
-        summary += `, ${observations} observations`
-      }
-      if (medications > 0) {
-        summary += `, ${medications} medications`
-      }
-      return summary
-    }
+    const patient = analysis.patientName ? `, Patient: ${analysis.patientName}` : ''
+    if (analysis.resourceType !== 'Bundle') return `Resource: ${analysis.resourceType || 'FHIR Resource'}${patient}`
+    const counts = Object.entries(analysis.resourceCounts || {}).map(([t, n]) => `${n} ${t}${n > 1 ? 's' : ''}`).join(', ')
+    return `Bundle: ${analysis.bundleType || 'collection'} with ${analysis.entryCount || 0} entries (${counts || 'no resources'})${patient}`
   }
 
   findNestedValue(structure, targetField) {
@@ -262,17 +234,15 @@ export class UIController {
   }
 
   generateHL7v2Summary(analysis) {
-    const messageType = analysis.messageType || 'HL7 Message'
-    const patientName = this.extractPatientName(analysis)
-    const segments = analysis.segmentCount || 0
-    
-    let summary = `Message: ${messageType}`
-    if (patientName) {
-      summary += `, Patient: ${patientName}`
-    }
-    if (segments > 0) {
-      summary += `, ${segments} segments`
-    }
+    let summary = `Message: ${analysis.messageType || 'HL7 Message'}`
+    if (analysis.patientName) summary += `, Patient: ${analysis.patientName}`
+    if (analysis.segmentCount) summary += `, ${analysis.segmentCount} segments`
+    return summary
+  }
+
+  generateASTMSummary(analysis) {
+    let summary = `ASTM: ${analysis.recordCount} records`
+    if (analysis.patientName) summary += `, Patient: ${analysis.patientName}`
     return summary
   }
 
@@ -749,7 +719,6 @@ export class UIController {
       if (this.itemCount >= this.maxItems) break
       
       // Skip technical segments/items
-      if (this.shouldSkipTechnicalItem(item)) continue
       
       const itemDiv = document.createElement('div')
       itemDiv.className = 'analysis-item pl-4 border-l-2 border-gray-200'
@@ -759,8 +728,7 @@ export class UIController {
       if (item.fields && item.fields.length > 0) {
         content += '<div class="analysis-value">'
         // Only show clinically relevant fields
-        const relevantFields = item.fields.filter(field => this.isClinicallyRelevant(field))
-        for (const field of relevantFields.slice(0, 5)) {
+        for (const field of item.fields) {
           if (field.value) {
             const dataType = this.getDataType(field.value)
             content += `<div class="text-xs mb-1">
@@ -804,11 +772,10 @@ export class UIController {
         key: 'Document Structure',
         type: 'document',
         value: `${data.length} sections`,
-        children: data.filter(item => !this.shouldSkipTechnicalItem(item))
-                    .map((item, index) => this.processDeepTreeItem(item, index, 0))
+        children: data.map((item, index) => this.processDeepTreeItem(item, index, 0))
       }
     } else if (typeof data === 'object' && data !== null) {
-      return this.processDeepTreeItem(data, null, 0)
+      return this.processDeepTreeItem(data, null, 0, `${format.toUpperCase()} Message`)
     }
     return {
       key: 'value',
@@ -1036,18 +1003,17 @@ export class UIController {
   }
 
   createFHIRTreeStructure(data) {
-    const resourceType = this.findFieldValue(data, 'resourceType') || 'FHIR Resource'
-    const bundleId = this.findFieldValue(data, 'id')
-    
-    if (resourceType === 'Bundle') {
-      return this.createFHIRBundleStructure(data, bundleId)
-    } else {
-      return {
-        key: `${resourceType} (FHIR)`,
-        type: 'resource',
-        value: bundleId ? `ID: ${bundleId}` : 'FHIR namespace',
-        children: this.processFHIRStructure(data)
-      }
+    const label = r => `${r?.resourceType || 'Resource'}${r?.id ? '/' + r.id : ''}`
+    if (data.resourceType !== 'Bundle') return this.processDeepTreeItem(data, null, 0, `${label(data)} (FHIR)`)
+    const { entry = [], ...meta } = data
+    return {
+      key: 'Bundle (FHIR)',
+      type: 'bundle',
+      value: `${data.type || 'collection'} - ${entry.length} entries`,
+      children: [
+        this.processDeepTreeItem(meta, null, 1, 'Bundle Metadata'),
+        ...entry.map((e, i) => this.processDeepTreeItem(e, i, 1, `${i + 1}. ${label(e.resource)}`))
+      ]
     }
   }
 
@@ -1069,7 +1035,7 @@ export class UIController {
   }
 
   processDeepTreeItem(item, index = null, depth = 0, parentKey = null) {
-    if (depth > 10 || this.itemCount >= this.maxItems) {
+    if (depth > this.maxDepth || this.itemCount >= this.maxItems) {
       return {
         key: '...',
         value: '(truncated)',
@@ -1092,7 +1058,7 @@ export class UIController {
       return {
         key: parentKey || 'array',
         type: `array[${item.length}]`,
-        children: item.slice(0, 50).map((element, idx) => 
+        children: item.map((element, idx) => 
           this.processDeepTreeItem(element, idx, depth + 1)
         )
       }
@@ -1104,53 +1070,35 @@ export class UIController {
     }
 
     const result = {
-      key: this.getContextualFriendlyName(parentKey || item.name) || (index !== null ? `Item ${index + 1}` : 'object'),
+      key: this.getContextualFriendlyName(parentKey) || (index !== null ? `Item ${index + 1}` : 'object'),
       type: 'object',
       children: []
     }
 
-    // Process fields if available (for HL7/CDA structure)
-    if (item.fields && Array.isArray(item.fields)) {
-      for (const field of item.fields.slice(0, 30)) {
-        if (field.value && this.isClinicallyRelevant(field)) {
-          result.children.push({
-            key: this.getFriendlyName(field.name),
-            value: this.formatClinicalValue(field.value),
-            type: this.getDataType(field.value),
-            isPriority: this.priorityFields.has(field.name.toLowerCase()),
-            children: []
-          })
-        }
-      }
-    } 
     // Process regular object properties
-    else {
-      const entries = Object.entries(item)
-        .filter(([key, value]) => {
-          if (key === 'name') return false
-          if (value === null || value === undefined) return false
-          // Skip technical fields but keep some important ones
-          if (this.shouldSkipTechnicalField(key)) return false
-          return true
-        })
-        .slice(0, 100)
+    const entries = Object.entries(item)
+      .filter(([key, value]) => {
+        if (value === null || value === undefined) return false
+        // Skip technical fields but keep some important ones
+        if (this.shouldSkipTechnicalField(key)) return false
+        return true
+      })
 
-      for (const [key, value] of entries) {
-        if (typeof value === 'object' && value !== null) {
-          // Recursive processing for nested objects
-          const childNode = this.processDeepTreeItem(value, null, depth + 1, key)
-          if (childNode.children.length > 0 || childNode.value) {
-            result.children.push(childNode)
-          }
-        } else {
-          result.children.push({
-            key: this.getFriendlyName(key),
-            value: this.formatClinicalValue(value),
-            type: this.getDataType(value),
-            isPriority: this.priorityFields.has(key.toLowerCase()),
-            children: []
-          })
+    for (const [key, value] of entries) {
+      if (typeof value === 'object' && value !== null) {
+        // Recursive processing for nested objects
+        const childNode = this.processDeepTreeItem(value, null, depth + 1, key)
+        if (childNode.children.length > 0 || childNode.value) {
+          result.children.push(childNode)
         }
+      } else {
+        result.children.push({
+          key: this.getFriendlyName(key),
+          value: this.formatClinicalValue(value),
+          type: this.getDataType(value),
+          isPriority: this.priorityFields.has(key.toLowerCase()),
+          children: []
+        })
       }
     }
 
@@ -1190,27 +1138,14 @@ export class UIController {
     if (typeof value === 'object') return '[object]'
     
     const str = String(value)
-    if (str.length > 100) {
-      return str.substring(0, 100) + '...'
+    if (str.length > 500) {
+      return str.substring(0, 500) + '...'
     }
     return str
   }
 
   shouldSkipTechnicalField(fieldName) {
-    const format = this.currentResult?.format || ''
-    
-    // For C-CDA, be much less restrictive - only skip truly technical fields
-    if (format.toLowerCase() === 'hl7v3' || format.toLowerCase() === 'cda') {
-      const skipFields = ['xmlns', 'schemaLocation', 'xsi']
-      return skipFields.some(skip => fieldName.toLowerCase().includes(skip))
-    }
-    
-    // For other formats, use the full technical field list
-    const technicalFields = [
-      'xmlns', 'schemaLocation', 'xsi', 'classCode', 'moodCode', 
-      'typeCode', 'nullFlavor', 'use', 'mediaType'
-    ]
-    return technicalFields.includes(fieldName.toLowerCase())
+    return /^(xmlns|xsi:|schemaLocation)/.test(fieldName)
   }
 
   createFHIRBundleStructure(data, bundleId) {
@@ -1556,7 +1491,7 @@ export class UIController {
       'telecom': 'Contact Information'
     }
     
-    return friendlyNames[name] || name.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim()
+    return friendlyNames[name] || name.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, str => str.toUpperCase())
   }
 
   getDataType(value) {

@@ -178,7 +178,6 @@ export class MessageParser {
       'RCP': 'Response Control Parameter',
       'SPM': 'Specimen',
       'SAC': 'Specimen and Container Detail',
-      'OBX': 'Observation/Result',
       'TCD': 'Test Code Detail',
       'SID': 'Substance Identifier',
       'TCC': 'Test Code Configuration',
@@ -198,15 +197,8 @@ export class MessageParser {
       'AIP': 'Appointment Information - Personnel Resource',
       'AIS': 'Appointment Information - Service',
       'APR': 'Appointment Preferences',
-      'PID': 'Patient Identification',
-      'PV1': 'Patient Visit',
       'RGS': 'Resource Group',
-      'AIG': 'Appointment Information - General Resource',
-      'AIL': 'Appointment Information - Location Resource',
-      'AIP': 'Appointment Information - Personnel Resource',
-      'AIS': 'Appointment Information - Service',
-      'NDS': 'Notification Detail',
-      'NTE': 'Notes and Comments'
+      'NDS': 'Notification Detail'
     }
 
     this.fhirResourceTypes = {
@@ -301,23 +293,10 @@ export class MessageParser {
   }
 
   parse(message, format) {
+    const parsers = { hl7v2: this.parseHL7v2, hl7v3: this.parseHL7v3, fhir: this.parseFHIR, astm: this.parseASTM, json: this.parseJSON, xml: this.parseXML }
+    if (!parsers[format]) throw new Error(`Unsupported format: ${format}`)
     try {
-      switch (format) {
-        case 'hl7v2':
-          return this.parseHL7v2(message)
-        case 'hl7v3':
-          return this.parseHL7v3(message)
-        case 'fhir':
-          return this.parseFHIR(message)
-        case 'astm':
-          return this.parseASTM(message)
-        case 'json':
-          return this.parseJSON(message)
-        case 'xml':
-          return this.parseXML(message)
-        default:
-          throw new Error(`Unsupported format: ${format}`)
-      }
+      return parsers[format].call(this, message)
     } catch (error) {
       throw new Error(`Failed to parse ${format} message: ${error.message}`)
     }
@@ -579,31 +558,19 @@ export class MessageParser {
   }
 
   parseJSON(message) {
-    try {
-      // Security: Limit message size to prevent DoS attacks
-      if (message.length > 10 * 1024 * 1024) { // 10MB limit
-        throw new Error('Message too large (max 10MB)')
+    if (message.length > MAX_INPUT) throw new Error('Message too large (max 10MB)')
+    const parsed = JSON.parse(message)
+    return {
+      format: 'json',
+      version: null,
+      formatted: JSON.stringify(parsed, null, 2),
+      analysis: {
+        type: Array.isArray(parsed) ? 'Array' : 'Object',
+        structure: this.analyzeJSONStructure(parsed),
+        detailedStructure: parsed,
+        size: message.length,
+        depth: this.calculateJSONDepth(parsed)
       }
-      
-      const parsed = JSON.parse(message)
-      
-      // Format JSON with proper indentation
-      const formatted = JSON.stringify(parsed, null, 2)
-      
-      return {
-        format: 'json',
-        version: null,
-        formatted: formatted,
-        analysis: {
-          type: Array.isArray(parsed) ? 'Array' : 'Object',
-          structure: this.analyzeJSONStructure(parsed),
-          detailedStructure: parsed,
-          size: message.length,
-          depth: this.calculateJSONDepth(parsed)
-        }
-      }
-    } catch (error) {
-      throw new Error(`JSON parsing error: ${error.message}`)
     }
   }
 

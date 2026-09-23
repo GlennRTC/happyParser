@@ -1,3 +1,7 @@
+import { HL7_SEGMENT_FIELDS, HL7_DATATYPE_COMPONENTS } from './hl7v2Definitions.js'
+
+const HL7_HEADERS = new Set(['MSH', 'FHS', 'BHS'])
+
 export class MessageParser {
   constructor() {
     this.hl7MessageTypes = {
@@ -277,87 +281,47 @@ export class MessageParser {
   }
 
   parseHL7v2(message) {
-    const lines = message.split(/\r?\n/).filter(line => line.trim())
-    const segments = []
-    let messageType = ''
-    let version = ''
+    const lines = message.split(/\r\n|\r|\n/).map(l => l.replace(/[\x0b\x1c]/g, '').trim()).filter(Boolean)
+    const header = lines.find(l => HL7_HEADERS.has(l.slice(0, 3)))
+    if (!header || !lines.some(l => l.startsWith('MSH'))) throw new Error('No MSH segment found')
+    const fs = header[3]
+    const enc = header.slice(4).split(fs)[0]
+    const d = { field: fs, component: enc[0] || '^', repetition: enc[1] || '~', escape: enc[2] || '\\', subcomponent: enc[3] || '&' }
 
-    for (const line of lines) {
-      const segmentType = line.substring(0, 3)
-      const fields = line.split('|')
-      
-      if (segmentType === 'MSH') {
-        messageType = fields[8] ? fields[8].split('^')[0] : ''
-        version = fields[11] || ''
+    const counts = {}
+    const segments = lines.map(line => {
+      const type = line.slice(0, 3)
+      const parts = line.split(fs)
+      const values = HL7_HEADERS.has(type) ? [fs, ...parts.slice(1)] : parts.slice(1)
+      const defs = HL7_SEGMENT_FIELDS[type] || []
+      counts[type] = (counts[type] || 0) + 1
+      return {
+        type,
+        index: counts[type],
+        name: this.hl7Segments[type] || type,
+        raw: line,
+        fields: values.map((value, i) => {
+          const [name, dataType] = [defs[i]].flat()
+          return { name: name || `${type}-${i + 1}`, value, position: i + 1, dataType }
+        })
       }
+    })
 
-      const segment = {
-        type: segmentType,
-        name: this.hl7Segments[segmentType] || segmentType,
-        fields: this.parseHL7Fields(fields, segmentType),
-        raw: line
-      }
-
-      segments.push(segment)
-    }
+    const msh = segments.find(s => s.type === 'MSH').fields
+    const [code = '', event = ''] = (msh[8]?.value || '').split(d.component)
+    const version = (msh[11]?.value || '').split(d.component)[0]
 
     return {
       format: 'hl7v2',
-      version: version,
-      formatted: this.formatHL7v2(segments),
+      version,
+      formatted: segments.map(s => s.raw).join('\n'),
       analysis: {
-        messageType: `${messageType} - ${this.hl7MessageTypes[messageType] || 'Unknown'}`,
-        segments: segments.map(seg => ({
-          name: `${seg.type} - ${seg.name}`,
-          fields: seg.fields.filter(f => f.value).slice(0, 10)
-        })),
+        messageType: `${code}${event ? '^' + event : ''} - ${this.hl7MessageTypes[code] || 'Unknown'}`,
+        segments: segments.map(seg => ({ name: `${seg.type} - ${seg.name}`, type: seg.type, index: seg.index, fields: seg.fields })),
         segmentCount: segments.length,
-        version: version
+        version
       }
     }
-  }
-
-  parseHL7Fields(fields, segmentType) {
-    const fieldDefinitions = {
-      'MSH': [
-        'Field Separator', 'Encoding Characters', 'Sending Application', 'Sending Facility',
-        'Receiving Application', 'Receiving Facility', 'Date/Time of Message', 'Security',
-        'Message Type', 'Message Control ID', 'Processing ID', 'Version ID'
-      ],
-      'PID': [
-        'Set ID', 'Patient ID', 'Patient Identifier List', 'Alternate Patient ID',
-        'Patient Name', 'Mother\'s Maiden Name', 'Date/Time of Birth', 'Administrative Sex',
-        'Patient Alias', 'Race', 'Patient Address', 'County Code', 'Phone Number - Home',
-        'Phone Number - Business', 'Primary Language'
-      ],
-      'OBX': [
-        'Set ID', 'Value Type', 'Observation Identifier', 'Observation Sub-ID',
-        'Observation Value', 'Units', 'References Range', 'Abnormal Flags',
-        'Probability', 'Nature of Abnormal Test', 'Observation Result Status', 'Effective Date'
-      ],
-      'OBR': [
-        'Set ID', 'Placer Order Number', 'Filler Order Number', 'Universal Service Identifier',
-        'Priority', 'Requested Date/Time', 'Observation Date/Time', 'Observation End Date/Time',
-        'Collection Volume', 'Collector Identifier', 'Specimen Action Code'
-      ]
-    }
-
-    const definitions = fieldDefinitions[segmentType] || []
-    const parsedFields = []
-
-    for (let i = 1; i < fields.length; i++) {
-      parsedFields.push({
-        name: definitions[i - 1] || `${segmentType}.${i}`,
-        value: fields[i] || '',
-        position: i
-      })
-    }
-
-    return parsedFields
-  }
-
-  formatHL7v2(segments) {
-    return segments.map(segment => segment.raw).join('\n')
   }
 
   parseHL7v3(message) {

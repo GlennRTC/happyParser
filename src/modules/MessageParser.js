@@ -246,14 +246,50 @@ export class MessageParser {
     }
 
     this.astmRecordTypes = {
-      'H': 'Header Record - Contains sender and receiver information',
-      'P': 'Patient Information Record - Contains patient demographics',
-      'O': 'Test Order Record - Contains test order information',
-      'R': 'Result Record - Contains test results',
-      'C': 'Comment Record - Contains comments',
-      'M': 'Manufacturer Information Record - Contains manufacturer info',
-      'S': 'Scientific Record - Contains scientific data',
-      'L': 'Terminator Record - Indicates end of transmission'
+      H: 'Header', P: 'Patient Information', O: 'Test Order', R: 'Result', C: 'Comment',
+      Q: 'Request Information', M: 'Manufacturer Information', S: 'Scientific', L: 'Terminator'
+    }
+
+    // ASTM E1394 / CLSI LIS2-A2 field names; position 1 is the record type
+    this.astmFields = {
+      H: ['Record Type ID', 'Delimiter Definition', 'Message Control ID', 'Access Password', 'Sender Name or ID',
+        'Sender Street Address', 'Reserved Field', 'Sender Telephone Number', 'Characteristics of Sender', 'Receiver ID',
+        'Comment or Special Instructions', 'Processing ID', 'Version Number', 'Date and Time of Message'],
+      P: ['Record Type ID', 'Sequence Number', 'Practice Assigned Patient ID', 'Laboratory Assigned Patient ID',
+        'Patient ID No. 3', 'Patient Name', 'Mother\'s Maiden Name', 'Birthdate', 'Patient Sex',
+        'Patient Race-Ethnic Origin', 'Patient Address', 'Reserved Field', 'Patient Telephone Number',
+        'Attending Physician ID', 'Special Field 1', 'Special Field 2', 'Patient Height', 'Patient Weight',
+        'Patient\'s Known or Suspected Diagnosis', 'Patient Active Medications', 'Patient\'s Diet', 'Practice Field No. 1',
+        'Practice Field No. 2', 'Admission and Discharge Dates', 'Admission Status', 'Location',
+        'Nature of Alternative Diagnostic Code and Classifiers', 'Alternative Diagnostic Code and Classification',
+        'Patient Religion', 'Marital Status', 'Isolation Status', 'Language', 'Hospital Service', 'Hospital Institution',
+        'Dosage Category'],
+      O: ['Record Type ID', 'Sequence Number', 'Specimen ID', 'Instrument Specimen ID', 'Universal Test ID', 'Priority',
+        'Requested/Ordered Date and Time', 'Specimen Collection Date and Time', 'Collection End Time',
+        'Collection Volume', 'Collector ID', 'Action Code', 'Danger Code', 'Relevant Clinical Information',
+        'Date/Time Specimen Received', 'Specimen Descriptor', 'Ordering Physician', 'Physician\'s Telephone Number',
+        'User Field No. 1', 'User Field No. 2', 'Laboratory Field No. 1', 'Laboratory Field No. 2',
+        'Date/Time Results Reported or Last Modified', 'Instrument Charge to Information System',
+        'Instrument Section ID', 'Report Types', 'Reserved Field', 'Location of Specimen Collection',
+        'Nosocomial Infection Flag', 'Specimen Service', 'Specimen Institution'],
+      R: ['Record Type ID', 'Sequence Number', 'Universal Test ID', 'Data or Measurement Value', 'Units',
+        'Reference Ranges', 'Result Abnormal Flags', 'Nature of Abnormality Testing', 'Result Status',
+        'Date of Change in Instrument Normative Values', 'Operator Identification', 'Date/Time Test Started',
+        'Date/Time Test Completed', 'Instrument Identification'],
+      C: ['Record Type ID', 'Sequence Number', 'Comment Source', 'Comment Text', 'Comment Type'],
+      Q: ['Record Type ID', 'Sequence Number', 'Starting Range ID Number', 'Ending Range ID Number', 'Universal Test ID',
+        'Nature of Request Time Limits', 'Beginning Request Results Date and Time', 'Ending Request Results Date and Time',
+        'Requesting Physician Name', 'Requesting Physician Telephone Number', 'User Field No. 1', 'User Field No. 2',
+        'Request Information Status Codes'],
+      M: ['Record Type ID', 'Sequence Number'],
+      S: ['Record Type ID', 'Sequence Number'],
+      L: ['Record Type ID', 'Sequence Number', 'Termination Code']
+    }
+    this.astmComponents = {
+      'Universal Test ID': ['Universal Test ID Number', 'Universal Test ID Name', 'Universal Test ID Type',
+        'Manufacturer\'s or Local Code'],
+      'Patient Name': ['Last Name', 'First Name', 'Middle Name', 'Suffix', 'Title'],
+      'Mother\'s Maiden Name': ['Last Name', 'First Name', 'Middle Name', 'Suffix', 'Title']
     }
   }
 
@@ -502,93 +538,63 @@ export class MessageParser {
     }
   }
 
-  parseASTM(message) {
-    const lines = message.split(/\r?\n/).filter(line => line.trim())
-    const records = []
-    
-    for (const line of lines) {
-      const cleaned = line.replace(/[\x02\x03\x04\x05\x06\x15\x17]/g, '')
-      const match = cleaned.match(/^(\d+)([A-Z])\|(.*)/)
-      
-      if (match) {
-        const [, sequence, recordType, data] = match
-        const fields = data.split('|')
-        
-        const record = {
-          sequence: sequence,
-          type: recordType,
-          name: this.astmRecordTypes[recordType] || recordType,
-          fields: this.parseASTMFields(fields, recordType),
-          raw: line
-        }
-        
-        records.push(record)
+  // ponytail: E1381 link-layer is only unwrapped (STX/FN/ETB/ETX/checksum); checksums are not verified
+  unframeASTM(message) {
+    if (message.includes('\x02')) {
+      let text = ''
+      for (const [, body, end] of message.matchAll(/\x02[0-7]([\s\S]*?)([\x03\x17])[0-9A-Fa-f]{2}/g)) {
+        text += body + (end === '\x03' ? '\r' : '')
       }
+      message = text
     }
+    return message.split(/\r\n|\r|\n/)
+      .map(l => l.replace(/[\x04\x05\x06\x15]/g, '').trim().replace(/^\d+(?=[A-Z][^A-Za-z0-9\s])/, ''))
+      .filter(l => /^[A-Z][^A-Za-z0-9\s]/.test(l))
+  }
+
+  parseASTM(message) {
+    const lines = this.unframeASTM(message)
+    const header = lines.find(l => l[0] === 'H')
+    const fs = header?.[1] || '|'
+    const delims = header ? header.slice(2).split(fs)[0] : ''
+    const d = { field: fs, repetition: delims[0] || '\\', component: delims[1] || '^', escape: delims[2] || '&' }
+
+    const counts = {}
+    const records = lines.filter(l => l[1] === fs).map(line => {
+      const type = line[0]
+      const defs = this.astmFields[type] || []
+      counts[type] = (counts[type] || 0) + 1
+      const fields = line.split(fs).map((value, i) => ({ name: defs[i] || `${type}-${i + 1}`, value, position: i + 1 }))
+      return { type, index: counts[type], sequence: fields[1]?.value || '', name: this.astmRecordTypes[type] || type, fields, raw: line }
+    })
+    if (!records.length) throw new Error('No ASTM records found')
+
+    const detailedStructure = Object.fromEntries(records.map(rec => [
+      `${rec.type} #${rec.index} - ${rec.name}`,
+      Object.fromEntries(rec.fields.filter(f => f.value !== '').map(f => {
+        const label = `${rec.type}-${f.position}`
+        const key = f.name === label ? label : `${label} ${f.name}`
+        const isDelims = rec.type === 'H' && f.position === 2
+        return [key, isDelims ? f.value : this.fieldTree(f.value, d, label, this.astmComponents[f.name])]
+      }))
+    ]))
+
+    const pName = records.find(r => r.type === 'P')?.fields[5]?.value || ''
+    const [last = '', first = ''] = pName.split(d.repetition)[0].split(d.component).map(v => this.decodeEscapes(v, d))
+    const hFields = records.find(r => r.type === 'H')?.fields || []
 
     return {
       format: 'astm',
-      version: this.detectASTMVersion(message),
-      formatted: this.formatASTM(records),
+      version: hFields[12]?.value || message.match(/LIS2-A2|E1394|E1381|E1238/)?.[0] || null,
+      formatted: records.map(r => r.raw).join('\n'),
       analysis: {
         recordTypes: [...new Set(records.map(r => r.type))],
         recordCount: records.length,
-        records: records.map(rec => ({
-          name: `${rec.type} - ${rec.name}`,
-          fields: rec.fields.filter(f => f.value).slice(0, 10)
-        }))
+        records: records.map(r => ({ name: `${r.type} - ${r.name}`, type: r.type, sequence: r.sequence, fields: r.fields })),
+        patientName: [first, last].filter(Boolean).join(' ') || null,
+        detailedStructure
       }
     }
-  }
-
-  parseASTMFields(fields, recordType) {
-    const fieldDefinitions = {
-      'H': [
-        'Delimiter Definition', 'Message Control ID', 'Access Password', 'Sender Name/ID',
-        'Sender Address', 'Reserved', 'Sender Phone', 'Sender Characteristics',
-        'Receiver ID', 'Comment', 'Processing ID', 'Version Number', 'Timestamp'
-      ],
-      'P': [
-        'Practice Patient ID', 'Lab Patient ID', 'Patient ID 3', 'Patient Name',
-        'Mother\'s Maiden Name', 'Birth Date', 'Patient Sex', 'Patient Race',
-        'Patient Address', 'Reserved', 'Patient Phone', 'Attending Physician'
-      ],
-      'O': [
-        'Specimen ID', 'Instrument Specimen ID', 'Universal Test ID', 'Priority',
-        'Requested Date/Time', 'Collection Date/Time', 'Collection End Time',
-        'Collection Volume', 'Collector ID', 'Action Code', 'Danger Code',
-        'Relevant Clinical Info'
-      ],
-      'R': [
-        'Universal Test ID', 'Data Value', 'Units', 'Reference Range',
-        'Abnormal Flag', 'Nature of QC', 'Result Status', 'Date Changed',
-        'Operator ID', 'Date/Time Started', 'Date/Time Completed', 'Instrument ID'
-      ]
-    }
-
-    const definitions = fieldDefinitions[recordType] || []
-    const parsedFields = []
-
-    for (let i = 0; i < fields.length; i++) {
-      parsedFields.push({
-        name: definitions[i] || `${recordType} Field ${i + 1}`,
-        value: fields[i] || '',
-        position: i + 1
-      })
-    }
-
-    return parsedFields
-  }
-
-  detectASTMVersion(message) {
-    if (message.includes('E1381')) return 'E1381'
-    if (message.includes('E1394')) return 'E1394'
-    if (message.includes('E1238')) return 'E1238'
-    return null
-  }
-
-  formatASTM(records) {
-    return records.map(record => record.raw).join('\n')
   }
 
   parseJSON(message) {

@@ -21,14 +21,7 @@ export class FormatDetector {
         /<Patient[^>]*xmlns[^>]*fhir/i
       ],
       astm: [
-        /^\d+H\|/,
-        /^\d+P\|/,
-        /^\d+O\|/,
-        /^\d+R\|/,
-        /^\d+L\|/,
-        /\x02\d+[HPORL]\|/,
-        /\\x02\d+[HPORL]\|/,
-        /STX\d+[HPORL]\|/
+        /^\x05?\x02?\d?[HPORL]\|/
       ],
       json: [
         /^\s*\{/,
